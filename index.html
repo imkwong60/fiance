@@ -56,6 +56,15 @@
             .header-title-text { font-size: 0.95rem; line-height: 1.2; }
             .header-sub-text { display: none; }
         }
+        /* 手機橫向：壓扁 header、縮減內距，避免怪異留白 */
+        @media (max-height: 500px) and (orientation: landscape) {
+            #app-header { padding-top: max(env(safe-area-inset-top, 0px), 4px); }
+            #app-header .max-w-7xl { gap: 0.25rem !important; padding-top: 0.25rem !important; padding-bottom: 0.25rem !important; }
+            #mobile-status-bar { display: none !important; }
+            #app-tabs nav button { padding-top: 0.4rem; padding-bottom: 0.4rem; }
+            main#main-content { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+            .header-title-text { font-size: 0.85rem; }
+        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 h-full flex flex-col">
@@ -898,16 +907,13 @@
     </div>
 
     <script type="module">
-        // Stock SDK：失敗時降級為手動填價，不讓整站癱瘓
+        // Stock SDK：非阻塞載入，避免白屏；失敗時僅影響自動報價
         let StockSDK = null;
         let stockSdkInstance = null;
-        try {
-            const mod = await import('https://esm.sh/stock-sdk');
+        import('https://esm.sh/stock-sdk').then(mod => {
             StockSDK = mod.StockSDK;
             stockSdkInstance = new StockSDK();
-        } catch (e) {
-            console.warn('stock-sdk 載入失敗，將僅支援手動填價', e);
-        }
+        }).catch(e => console.warn('stock-sdk 載入失敗，將僅支援手動填價', e));
 
         const SUPABASE_URL = 'https://wanknivxcsrasdkkxmfr.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndhbmtuaXZ4Y3NyYXNka2t4bWZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODczMzE4NjcsImV4cCI6MjEwMjkwNzg2N30.tqsFimERtYCxoh8J-8FlqxByWtX2gNnyaGo08jditrs';
@@ -1160,6 +1166,7 @@
                 localStorage.setItem('portfolio_email', currentEmail);
                 updateEmailStatus();
             }
+            setSyncStatus('syncing');
             try {
                 const payload = {
                     id: getCloudId(currentEmail),
@@ -1167,15 +1174,18 @@
                         holdings, incomeRecords, properties, policies,
                         email: currentEmail,
                         updatedAt: new Date().toISOString(),
-                        app: 'jlaw_portfolio'
+                        app: 'jlaw_portfolio',
+                        version: 5
                     },
                     updated_at: new Date().toISOString()
                 };
                 const { error } = await supabase.from('notepad_data').upsert(payload, { onConflict: 'id' });
                 if (error) throw error;
+                setSyncStatus('ok');
                 showToast('已成功同步到雲端', 'success');
                 closeEmailModal();
             } catch (err) {
+                setSyncStatus('error');
                 showToast('儲存失敗：' + (err.message || err), 'info');
             }
         }
@@ -1186,7 +1196,8 @@
             showToast('已解除綁定', 'info');
             closeEmailModal();
         }
-        async function autoSaveToCloud() {
+        let autoSaveTimer = null;
+        async function autoSaveToCloudNow() {
             if (!currentEmail) return;
             setSyncStatus('syncing');
             try {
@@ -1201,6 +1212,14 @@
                 console.warn(e);
                 setSyncStatus('error');
             }
+        }
+        function autoSaveToCloud() {
+            if (!currentEmail) return;
+            if (autoSaveTimer) clearTimeout(autoSaveTimer);
+            autoSaveTimer = setTimeout(() => {
+                autoSaveTimer = null;
+                autoSaveToCloudNow();
+            }, 400);
         }
 
         // ========== Exchange ==========
@@ -1370,13 +1389,22 @@
             }
         }
 
+        function getMainScrollTop() {
+            const main = document.getElementById('main-content');
+            return main ? main.scrollTop : (window.scrollY || 0);
+        }
+        function scrollMainToTop() {
+            const main = document.getElementById('main-content');
+            if (main) main.scrollTo({ top: 0, behavior: 'smooth' });
+            else window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
         function switchTabBySwipe(direction) {
             const idx = TAB_ORDER.indexOf(currentTab);
             if (idx < 0) return;
             const next = idx - direction;
             if (next < 0 || next >= TAB_ORDER.length) return;
             switchTab(TAB_ORDER[next]);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            scrollMainToTop();
         }
 
         function setupPullToRefresh() {
@@ -1388,7 +1416,7 @@
                 ptrStartX = e.touches[0].clientX;
                 ptrLastY = ptrStartY;
                 ptrLastX = ptrStartX;
-                ptrPulling = window.scrollY <= 1 && ptrStartY < 180;
+                ptrPulling = getMainScrollTop() <= 1 && ptrStartY < 180;
                 swipeTracking = true;
                 ptrClearHold();
             }, { passive: true });
@@ -1403,9 +1431,9 @@
                 ptrLastY = y;
                 ptrLastX = x;
 
-                if (ptrPulling && window.scrollY <= 1 && dy > PTR_SHOW_AT && dy > Math.abs(dx) * 2) {
+                const atTop = getMainScrollTop() <= 1;
+                if (ptrPulling && atTop && dy > PTR_SHOW_AT && dy > Math.abs(dx) * 2) {
                     if (dy >= PTR_THRESHOLD) {
-                        // 到位後若手指仍大幅移動則重計時；幾乎不動則開始／維持 2 秒倒數
                         if (moveDelta > PTR_STILL_PX) {
                             ptrClearHold();
                             ptrSetUI(true, '停下並按住 2 秒', false);
@@ -1417,7 +1445,7 @@
                         ptrSetUI(true, '繼續下拉以更新', false);
                     }
                 } else {
-                    if (window.scrollY > 1 || Math.abs(dx) > Math.abs(dy)) ptrPulling = false;
+                    if (!atTop || Math.abs(dx) > Math.abs(dy)) ptrPulling = false;
                     ptrClearHold();
                     ptrSetUI(false, '下拉更新', false);
                 }
@@ -1531,15 +1559,20 @@
                 try {
                     const data = JSON.parse(e.target.result);
                     if (Array.isArray(data)) {
-                        // v1 陣列格式：只覆寫 holdings，並遷移 dividend
+                        // v1 陣列格式：只覆寫 holdings，並遷移 dividend（避免重複匯入）
                         holdings = data;
                         holdings.forEach(h => {
                             if (h.dividend && Number(h.dividend) > 0) {
-                                incomeRecords.push({
-                                    id: 'mig_' + (h.id || Date.now()) + '_' + Math.random().toString(36).slice(2, 7),
-                                    holdingId: h.id, ticker: h.ticker, name: h.name, type: h.type, currency: h.currency,
-                                    date: localDateStr(), amount: Number(h.dividend), note: '從舊版 dividend 遷移'
-                                });
+                                const already = incomeRecords.some(r =>
+                                    r.holdingId === h.id && r.note === '從舊版 dividend 遷移' && Number(r.amount) === Number(h.dividend)
+                                );
+                                if (!already) {
+                                    incomeRecords.push({
+                                        id: 'mig_' + (h.id || Date.now()) + '_' + Math.random().toString(36).slice(2, 7),
+                                        holdingId: h.id, ticker: h.ticker, name: h.name, type: h.type, currency: h.currency,
+                                        date: localDateStr(), amount: Number(h.dividend), note: '從舊版 dividend 遷移'
+                                    });
+                                }
                                 delete h.dividend;
                             }
                             if (h.expectedAnnual != null) delete h.expectedAnnual;
@@ -2192,7 +2225,7 @@
                 : years.map(y => `
                     <div class="bg-slate-50 border border-slate-100 rounded-xl p-3 text-center">
                         <div class="text-xs text-slate-500 font-medium">${y}</div>
-                        <div class="text-lg font-bold text-emerald-600 mt-0.5">$${Math.round(yearMap[y]).toLocaleString()}</div>
+                        <div class="text-lg font-bold text-emerald-600 mt-0.5">${moneyLabel(Math.round(yearMap[y]), '$', 0)}</div>
                     </div>`).join('');
 
             // Income records table
@@ -2244,9 +2277,9 @@
                         <div class="text-xs text-slate-500">${escapeHtml(row.name)}</div>
                     </td>
                     <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded text-xs font-medium ${typeCls}">${typeLabel}</span></td>
-                    <td class="py-2.5 px-3 text-right text-slate-600">${costHKD > 0 ? '$' + Math.round(costHKD).toLocaleString() : '—'}</td>
-                    <td class="py-2.5 px-3 text-right font-semibold text-emerald-600">$${fmtMoney(row.receivedHKD)}</td>
-                    <td class="py-2.5 px-3 text-right font-bold ${yld != null ? (yld >= 0 ? 'text-emerald-600' : 'text-rose-600') : 'text-slate-400'}">${yld != null ? yld.toFixed(2) + '%' : '—'}</td>
+                    <td class="py-2.5 px-3 text-right text-slate-600">${costHKD > 0 ? moneyLabel(Math.round(costHKD), '$', 0) : '—'}</td>
+                    <td class="py-2.5 px-3 text-right font-semibold text-emerald-600">${moneyLabel(row.receivedHKD)}</td>
+                    <td class="py-2.5 px-3 text-right font-bold ${yld != null ? (yld >= 0 ? 'text-emerald-600' : 'text-rose-600') : 'text-slate-400'}">${privacyMode ? '**.**%' : (yld != null ? yld.toFixed(2) + '%' : '—')}</td>
                     <td class="py-2.5 px-3 text-right text-slate-500">${row.count}</td>`;
                 yieldBody.appendChild(tr);
 
@@ -2260,12 +2293,12 @@
                                 <div class="text-xs text-slate-500 truncate">${escapeHtml(row.name)}</div>
                             </div>
                             <div class="text-right shrink-0">
-                                <div class="font-bold ${yld != null ? 'text-emerald-600' : 'text-slate-400'}">${yld != null ? yld.toFixed(2) + '%' : '—'}</div>
+                                <div class="font-bold ${yld != null ? 'text-emerald-600' : 'text-slate-400'}">${privacyMode ? '**.**%' : (yld != null ? yld.toFixed(2) + '%' : '—')}</div>
                                 <div class="text-[10px] text-slate-400">年回報</div>
                             </div>
                         </div>
                         <div class="mt-2 flex justify-between text-xs text-slate-600">
-                            <span>已收 $${fmtMoney(row.receivedHKD)} · ${row.count} 筆</span>
+                            <span>已收 ${moneyLabel(row.receivedHKD)} · ${row.count} 筆</span>
                             <span class="px-1.5 py-0.5 rounded ${typeCls}">${typeLabel}</span>
                         </div>`;
                     yieldCards.appendChild(card);
@@ -2372,7 +2405,7 @@
                     <td class="py-3 px-4 text-right text-slate-500">${escapeHtml(p.currency)} ${fmtMoney(p.rates || 0)}</td>
                     <td class="py-3 px-4 text-right text-slate-500">${escapeHtml(p.currency)} ${fmtMoney(p.otherExp || 0)}</td>
                     <td class="py-3 px-4 text-right font-semibold text-emerald-600">${escapeHtml(p.currency)} ${fmtMoney(net)}</td>
-                    <td class="py-3 px-4 text-right font-medium">${yld.toFixed(2)}%</td>
+                    <td class="py-3 px-4 text-right font-medium">${privacyMode ? '**.**%' : yld.toFixed(2) + '%'}</td>
                     <td class="py-3 px-4 text-center">
                         <div class="flex items-center justify-center space-x-0.5">
                             <button onclick="openPropertyModal('${p.id}')" class="p-1.5 hover:bg-slate-200 rounded-lg text-slate-600" title="編輯"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
@@ -2392,7 +2425,7 @@
                             </div>
                             <div class="text-right shrink-0">
                                 <div class="text-xs text-slate-400">淨收益率</div>
-                                <div class="font-bold text-emerald-600">${yld.toFixed(2)}%</div>
+                                <div class="font-bold text-emerald-600">${privacyMode ? '**.**%' : yld.toFixed(2) + '%'}</div>
                             </div>
                         </div>
                         <div class="grid grid-cols-2 gap-2 text-sm">
@@ -2419,14 +2452,19 @@
         function askAi(promptText) {
             const box = document.getElementById('ai-response-box');
             box.classList.remove('hidden');
+            if (privacyMode) {
+                box.innerHTML = `<div class="text-slate-600 text-sm">目前為<strong>隱私模式</strong>，摘要數字已遮擋。請先關閉隱私模式再產生可複製的分析摘要。<br><br>
+                <p class="text-xs text-slate-500">問題：${escapeHtml(promptText || '（請在下方輸入）')}</p></div>`;
+                return;
+            }
             const summary = holdings.map(h => `- ${h.name} (${h.ticker}): 數量 ${h.quantity}, 成本 ${h.buyPrice}, 現價 ${h.currentPrice ?? h.buyPrice}`).join('\n');
             const inc = incomeRecords.slice(0, 20).map(r => `- ${r.date} ${r.ticker}: ${r.currency} ${r.amount}`).join('\n');
             const prop = properties.map(p => `- ${p.name}: 買入 ${p.buyPrice}, 市值 ${p.currentValue}, 年租 ${p.annualRent}`).join('\n');
             box.innerHTML = `<div class="text-slate-600 text-sm">目前需自行複製以下摘要到其他 AI 工具分析：<br><br>
-                <strong>持倉</strong><pre class="mt-1 p-2 bg-slate-100 rounded text-xs overflow-x-auto whitespace-pre-wrap">${summary || '無'}</pre>
-                <strong class="mt-3 block">近期股息入帳</strong><pre class="mt-1 p-2 bg-slate-100 rounded text-xs overflow-x-auto whitespace-pre-wrap">${inc || '無'}</pre>
-                <strong class="mt-3 block">不動產</strong><pre class="mt-1 p-2 bg-slate-100 rounded text-xs overflow-x-auto whitespace-pre-wrap">${prop || '無'}</pre>
-                <p class="mt-3 text-xs text-slate-500">問題：${promptText || '（請在下方輸入）'}</p></div>`;
+                <strong>持倉</strong><pre class="mt-1 p-2 bg-slate-100 rounded text-xs overflow-x-auto whitespace-pre-wrap">${escapeHtml(summary) || '無'}</pre>
+                <strong class="mt-3 block">近期股息入帳</strong><pre class="mt-1 p-2 bg-slate-100 rounded text-xs overflow-x-auto whitespace-pre-wrap">${escapeHtml(inc) || '無'}</pre>
+                <strong class="mt-3 block">不動產</strong><pre class="mt-1 p-2 bg-slate-100 rounded text-xs overflow-x-auto whitespace-pre-wrap">${escapeHtml(prop) || '無'}</pre>
+                <p class="mt-3 text-xs text-slate-500">問題：${escapeHtml(promptText || '（請在下方輸入）')}</p></div>`;
         }
         function submitAiPrompt() {
             const v = document.getElementById('ai-custom-prompt').value.trim();
