@@ -32,76 +32,107 @@
     <style>
         body { font-family: 'Inter', 'Microsoft JhengHei', 'PingFang TC', 'Noto Sans TC', ui-sans-serif, system-ui, sans-serif; }
         .tab-active { border-bottom: 2px solid #10b981; color: #059669; font-weight: 600; }
-        /* 手機直向：安全區、較大觸控、表格可橫滑提示 */
         html, body { min-height: 100%; }
+        /* 頂部／底部安全區：避免遮住 iPhone 時間與底部橫條 */
         body { padding-bottom: env(safe-area-inset-bottom, 0); }
-        header { padding-left: env(safe-area-inset-left, 0); padding-right: env(safe-area-inset-right, 0); }
-        @media (max-width: 640px) {
-            header .max-w-7xl { height: auto; min-height: 3.5rem; padding-top: 0.5rem; padding-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem; }
+        #app-header {
+            padding-top: env(safe-area-inset-top, 0);
+            padding-left: env(safe-area-inset-left, 0);
+            padding-right: env(safe-area-inset-right, 0);
+        }
+        #app-tabs {
+            top: calc(env(safe-area-inset-top, 0px) + var(--header-h, 7.5rem));
+        }
+        @media (min-width: 640px) {
+            #app-tabs { top: calc(env(safe-area-inset-top, 0px) + 4rem); }
+            #mobile-status-bar { display: none !important; }
+        }
+        @media (max-width: 639px) {
+            #desktop-email-chip { display: none !important; }
             #exchange-rate-badge { display: none !important; }
             main { padding-left: 0.75rem; padding-right: 0.75rem; }
             .overflow-x-auto { -webkit-overflow-scrolling: touch; }
             .overflow-x-auto table { min-width: 640px; }
-            /* 摘要卡片在手機改單欄更易讀 */
             #view-holdings > .grid,
             #view-passive > .grid,
             #view-property > .grid,
             #view-insurance > .grid { gap: 0.75rem; }
+            .header-title-text { font-size: 0.95rem; line-height: 1.2; }
+            .header-sub-text { display: none; }
         }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 h-full flex flex-col">
 
-    <header class="bg-slate-900 text-white shadow-md sticky top-0 z-40">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-                <div class="bg-emerald-500 p-2 rounded-xl text-slate-900 font-bold shadow-lg flex items-center justify-center">
-                    <i data-lucide="trending-up" class="w-6 h-6"></i>
+    <header id="app-header" class="bg-slate-900 text-white shadow-md sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2 sm:py-0 sm:h-16 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <!-- 第一列：標題 + 操作按鈕 -->
+            <div class="flex items-center justify-between gap-2 min-w-0">
+                <div class="flex items-center space-x-2 sm:space-x-3 min-w-0">
+                    <div class="bg-emerald-500 p-1.5 sm:p-2 rounded-xl text-slate-900 font-bold shadow-lg flex items-center justify-center shrink-0">
+                        <i data-lucide="trending-up" class="w-5 h-5 sm:w-6 sm:h-6"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="header-title-text text-base sm:text-xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-200 bg-clip-text text-transparent truncate">J.Law Portfolio Tracking</h1>
+                        <p class="header-sub-text text-xs text-slate-400">持倉 · 被動收入 · 不動產 · 保險</p>
+                    </div>
                 </div>
-                <div>
-                    <h1 class="text-xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-200 bg-clip-text text-transparent">J.Law Portfolio Tracking</h1>
-                    <p class="text-xs text-slate-400">持倉 · 被動收入 · 不動產 · 保險</p>
+                <div class="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
+                    <div id="desktop-email-chip" class="hidden sm:flex items-center space-x-2 bg-slate-800 px-3 py-1.5 rounded-lg text-xs border border-slate-700">
+                        <span id="sync-status-dot" class="inline-block w-2 h-2 rounded-full bg-slate-500" title="未同步"></span>
+                        <i data-lucide="mail" class="w-3.5 h-3.5 text-slate-400"></i>
+                        <span id="email-status" class="text-slate-300 max-w-[140px] truncate">未綁定 Email</span>
+                    </div>
+                    <button type="button" onclick="openRateModal()" id="exchange-rate-badge" title="點擊可查看 / 手動設定匯率" class="hidden md:flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg text-xs border border-slate-700 transition cursor-pointer">
+                        <span id="rate-status-dot" class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span class="text-slate-300">USD</span>
+                        <span id="usd-hkd-rate" class="font-semibold text-emerald-400">—</span>
+                        <span class="text-slate-600">|</span>
+                        <span class="text-slate-300">CNY</span>
+                        <span id="cny-hkd-rate" class="font-semibold text-sky-400">—</span>
+                    </button>
+                    <button onclick="openEmailModal()" title="雲端同步" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2.5 rounded-xl border border-slate-700 shadow-sm transition flex items-center justify-center" aria-label="雲端同步">
+                        <i data-lucide="cloud" class="w-4 h-4"></i>
+                    </button>
+                    <button onclick="exportToJson()" title="匯出 JSON" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2.5 rounded-xl border border-slate-700 shadow-sm transition flex items-center justify-center" aria-label="匯出">
+                        <i data-lucide="upload" class="w-4 h-4"></i>
+                    </button>
+                    <button onclick="triggerImport()" title="匯入 JSON" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2.5 rounded-xl border border-slate-700 shadow-sm transition flex items-center justify-center" aria-label="匯入">
+                        <i data-lucide="download" class="w-4 h-4"></i>
+                    </button>
+                    <input type="file" id="import-file-input" accept=".json" class="hidden" onchange="handleFileImport(event)">
+                    <button onclick="refreshAllPrices()" id="refresh-prices-btn" title="更新現價" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2.5 rounded-xl border border-slate-700 shadow-sm transition flex items-center justify-center" aria-label="更新現價">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                    </button>
+                    <button id="header-add-btn" onclick="headerAddAction()" title="新增" class="bg-emerald-600 hover:bg-emerald-500 text-white p-2.5 rounded-xl shadow-sm transition flex items-center justify-center" aria-label="新增">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                    </button>
                 </div>
             </div>
-            <div class="flex items-center space-x-2 sm:space-x-3">
-                <div class="hidden sm:flex items-center space-x-2 bg-slate-800 px-3 py-1.5 rounded-lg text-xs border border-slate-700">
-                    <span id="sync-status-dot" class="inline-block w-2 h-2 rounded-full bg-slate-500" title="未同步"></span>
-                    <i data-lucide="mail" class="w-3.5 h-3.5 text-slate-400"></i>
-                    <span id="email-status" class="text-slate-300 max-w-[140px] truncate">未綁定 Email</span>
-                </div>
-                <button type="button" onclick="openRateModal()" id="exchange-rate-badge" title="點擊可查看 / 手動設定匯率" class="hidden md:flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg text-xs border border-slate-700 transition cursor-pointer">
-                    <span id="rate-status-dot" class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span class="text-slate-300">USD</span>
-                    <span id="usd-hkd-rate" class="font-semibold text-emerald-400">—</span>
-                    <span class="text-slate-600">|</span>
-                    <span class="text-slate-300">CNY</span>
-                    <span id="cny-hkd-rate" class="font-semibold text-sky-400">—</span>
+            <!-- 手機第二列：Email + 匯率（桌面隱藏） -->
+            <div id="mobile-status-bar" class="flex sm:hidden items-center justify-between gap-2 text-[11px] pb-0.5">
+                <button type="button" onclick="openEmailModal()" class="flex items-center space-x-1.5 bg-slate-800/80 px-2.5 py-1.5 rounded-lg border border-slate-700 min-w-0 max-w-[48%]">
+                    <span id="sync-status-dot-m" class="inline-block w-1.5 h-1.5 rounded-full bg-slate-500 shrink-0"></span>
+                    <i data-lucide="mail" class="w-3 h-3 text-slate-400 shrink-0"></i>
+                    <span id="email-status-m" class="text-slate-300 truncate">未綁定 Email</span>
                 </button>
-                <button onclick="openEmailModal()" title="雲端同步" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2.5 rounded-xl border border-slate-700 shadow-sm transition flex items-center justify-center" aria-label="雲端同步">
-                    <i data-lucide="cloud" class="w-4 h-4"></i>
-                </button>
-                <button onclick="exportToJson()" title="匯出 JSON" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2.5 rounded-xl border border-slate-700 shadow-sm transition flex items-center justify-center" aria-label="匯出">
-                    <i data-lucide="upload" class="w-4 h-4"></i>
-                </button>
-                <button onclick="triggerImport()" title="匯入 JSON" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2.5 rounded-xl border border-slate-700 shadow-sm transition flex items-center justify-center" aria-label="匯入">
-                    <i data-lucide="download" class="w-4 h-4"></i>
-                </button>
-                <input type="file" id="import-file-input" accept=".json" class="hidden" onchange="handleFileImport(event)">
-                <button onclick="refreshAllPrices()" id="refresh-prices-btn" title="更新現價" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2.5 rounded-xl border border-slate-700 shadow-sm transition flex items-center justify-center" aria-label="更新現價">
-                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-                </button>
-                <button id="header-add-btn" onclick="headerAddAction()" title="新增" class="bg-emerald-600 hover:bg-emerald-500 text-white p-2.5 rounded-xl shadow-sm transition flex items-center justify-center" aria-label="新增">
-                    <i data-lucide="plus" class="w-4 h-4"></i>
+                <button type="button" onclick="openRateModal()" class="flex items-center space-x-1.5 bg-slate-800/80 px-2.5 py-1.5 rounded-lg border border-slate-700 shrink-0">
+                    <span id="rate-status-dot-m" class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>
+                    <span class="text-slate-400">USD</span>
+                    <span id="usd-hkd-rate-m" class="font-semibold text-emerald-400">—</span>
+                    <span class="text-slate-600">·</span>
+                    <span class="text-slate-400">CNY</span>
+                    <span id="cny-hkd-rate-m" class="font-semibold text-sky-400">—</span>
                 </button>
             </div>
         </div>
     </header>
 
     <!-- Tabs -->
-    <div class="bg-white border-b border-slate-200 sticky top-16 z-30">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <nav class="flex space-x-6 overflow-x-auto">
-                <button id="tab-holdings" onclick="switchTab('holdings')" class="py-3 px-1 text-sm tab-active border-b-2 border-emerald-500 text-emerald-600 font-semibold whitespace-nowrap">
+    <div id="app-tabs" class="bg-white border-b border-slate-200 sticky z-30">
+        <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+            <nav class="flex space-x-4 sm:space-x-6 overflow-x-auto">
+                <button id="tab-holdings" onclick="switchTab('holdings')" class="py-2.5 sm:py-3 px-1 text-sm tab-active border-b-2 border-emerald-500 text-emerald-600 font-semibold whitespace-nowrap">
                     <span class="flex items-center space-x-1.5"><i data-lucide="briefcase" class="w-4 h-4"></i><span>持倉</span></span>
                 </button>
                 <button id="tab-passive" onclick="switchTab('passive')" class="py-3 px-1 text-sm text-slate-500 hover:text-slate-800 border-b-2 border-transparent whitespace-nowrap">
@@ -853,6 +884,13 @@
     </div>
 
     <div id="toast-container" class="fixed bottom-5 right-5 z-50 space-y-2"></div>
+    <!-- 下拉更新提示 -->
+    <div id="ptr-indicator" class="fixed left-0 right-0 z-50 flex justify-center pointer-events-none opacity-0 transition-opacity duration-150" style="top: calc(env(safe-area-inset-top, 0px) + 8px);">
+        <div class="bg-slate-900/90 text-white text-xs font-medium px-3 py-1.5 rounded-full shadow-lg flex items-center space-x-2 border border-slate-700">
+            <i data-lucide="refresh-cw" id="ptr-icon" class="w-3.5 h-3.5"></i>
+            <span id="ptr-text">下拉更新</span>
+        </div>
+    </div>
 
     <script type="module">
         // Stock SDK：失敗時降級為手動填價，不讓整站癱瘓
@@ -996,8 +1034,12 @@
 
         // ========== Cloud ==========
         function updateEmailStatus() {
+            const text = currentEmail || '未綁定 Email';
             const el = document.getElementById('email-status');
-            el.innerText = currentEmail || '未綁定 Email';
+            const elM = document.getElementById('email-status-m');
+            if (el) el.innerText = text;
+            if (elM) elM.innerText = text;
+            updateHeaderOffset();
         }
         function openEmailModal() {
             document.getElementById('email-input').value = currentEmail;
@@ -1010,14 +1052,16 @@
         }
         function setSyncStatus(status) {
             syncStatus = status;
-            const el = document.getElementById('sync-status-dot');
-            if (!el) return;
-            el.className = 'inline-block w-2 h-2 rounded-full ' + (
+            const cls = 'inline-block rounded-full ' + (
                 status === 'syncing' ? 'bg-amber-400 animate-pulse' :
                 status === 'ok' ? 'bg-emerald-400' :
                 status === 'error' ? 'bg-rose-500' : 'bg-slate-500'
             );
-            el.title = status === 'syncing' ? '同步中…' : status === 'ok' ? '已同步' : status === 'error' ? '同步失敗' : '未同步';
+            const title = status === 'syncing' ? '同步中…' : status === 'ok' ? '已同步' : status === 'error' ? '同步失敗' : '未同步';
+            const el = document.getElementById('sync-status-dot');
+            const elM = document.getElementById('sync-status-dot-m');
+            if (el) { el.className = cls + ' w-2 h-2'; el.title = title; }
+            if (elM) { elM.className = cls + ' w-1.5 h-1.5 shrink-0'; elM.title = title; }
         }
 
         async function bindEmailAndLoad(emailOverride) {
@@ -1125,18 +1169,30 @@
 
         // ========== Exchange ==========
         function updateRateBadge() {
-            const usdEl = document.getElementById('usd-hkd-rate');
-            const cnyEl = document.getElementById('cny-hkd-rate');
+            const usd = exchangeRates.USD.toFixed(4);
+            const cny = exchangeRates.CNY.toFixed(4);
+            ['usd-hkd-rate', 'usd-hkd-rate-m'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerText = usd;
+            });
+            ['cny-hkd-rate', 'cny-hkd-rate-m'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerText = cny;
+            });
+            const dotCls = rateManual
+                ? 'inline-block rounded-full bg-amber-400'
+                : 'inline-block rounded-full bg-emerald-400 animate-pulse';
             const dot = document.getElementById('rate-status-dot');
+            const dotM = document.getElementById('rate-status-dot-m');
+            if (dot) dot.className = dotCls + ' w-2 h-2';
+            if (dotM) dotM.className = dotCls + ' w-1.5 h-1.5 shrink-0';
             const hint = document.getElementById('rate-mode-hint');
-            if (usdEl) usdEl.innerText = exchangeRates.USD.toFixed(4);
-            if (cnyEl) cnyEl.innerText = exchangeRates.CNY.toFixed(4);
-            if (rateManual) {
-                if (dot) { dot.className = 'inline-block w-2 h-2 rounded-full bg-amber-400'; }
-                if (hint) hint.innerText = '目前：手動覆寫（不會被自動更新蓋掉）';
-            } else {
-                if (dot) { dot.className = 'inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse'; }
-                if (hint) hint.innerText = '目前：自動更新';
+            if (hint) hint.innerText = rateManual ? '目前：手動覆寫（不會被自動更新蓋掉）' : '目前：自動更新';
+        }
+        function updateHeaderOffset() {
+            const header = document.getElementById('app-header');
+            if (header) {
+                document.documentElement.style.setProperty('--header-h', header.offsetHeight + 'px');
             }
         }
         function openRateModal() {
@@ -1205,8 +1261,88 @@
         }
 
         // ========== Init ==========
+        // ========== 下拉更新（手機） ==========
+        let ptrStartY = 0;
+        let ptrPulling = false;
+        let ptrRefreshing = false;
+        const PTR_THRESHOLD = 72;
+
+        function ptrSetUI(visible, text, spinning) {
+            const ind = document.getElementById('ptr-indicator');
+            const icon = document.getElementById('ptr-icon');
+            const label = document.getElementById('ptr-text');
+            if (!ind) return;
+            ind.style.opacity = visible ? '1' : '0';
+            if (label && text) label.innerText = text;
+            if (icon) {
+                if (spinning) icon.classList.add('animate-spin');
+                else icon.classList.remove('animate-spin');
+            }
+        }
+
+        async function pullToRefreshAll() {
+            if (ptrRefreshing) return;
+            ptrRefreshing = true;
+            ptrSetUI(true, '更新中…', true);
+            try {
+                await fetchExchangeRates(true);
+                if (currentEmail) {
+                    await bindEmailAndLoad(currentEmail);
+                }
+                await refreshAllPrices();
+                showToast('資料已更新', 'success');
+            } catch (e) {
+                console.warn(e);
+                showToast('更新時發生錯誤', 'info');
+            } finally {
+                ptrRefreshing = false;
+                ptrSetUI(false, '下拉更新', false);
+            }
+        }
+
+        function setupPullToRefresh() {
+            // 僅在接近頁面頂部時啟用，避免與表格橫滑衝突
+            document.addEventListener('touchstart', (e) => {
+                if (ptrRefreshing) return;
+                if (window.scrollY > 5) return;
+                // 有 modal 開啟時不觸發
+                const openModal = document.querySelector('[id$="-modal"]:not(.hidden)');
+                if (openModal) return;
+                ptrStartY = e.touches[0].clientY;
+                ptrPulling = true;
+            }, { passive: true });
+
+            document.addEventListener('touchmove', (e) => {
+                if (!ptrPulling || ptrRefreshing) return;
+                if (window.scrollY > 5) {
+                    ptrPulling = false;
+                    ptrSetUI(false, '下拉更新', false);
+                    return;
+                }
+                const dy = e.touches[0].clientY - ptrStartY;
+                if (dy > 12) {
+                    const ready = dy >= PTR_THRESHOLD;
+                    ptrSetUI(true, ready ? '放開即可更新' : '下拉更新', false);
+                }
+            }, { passive: true });
+
+            document.addEventListener('touchend', (e) => {
+                if (!ptrPulling || ptrRefreshing) return;
+                ptrPulling = false;
+                const dy = (e.changedTouches[0]?.clientY || 0) - ptrStartY;
+                if (window.scrollY <= 5 && dy >= PTR_THRESHOLD) {
+                    pullToRefreshAll();
+                } else {
+                    ptrSetUI(false, '下拉更新', false);
+                }
+            }, { passive: true });
+        }
+
         window.onload = function() {
             updateEmailStatus();
+            updateRateBadge();
+            updateHeaderOffset();
+            window.addEventListener('resize', updateHeaderOffset);
             fetchExchangeRates();
             renderTable();
             // 修復：用 currentEmail 直接載入，不依賴未開啟的 input
@@ -1222,6 +1358,7 @@
                     document.querySelectorAll('[id$="-modal"]').forEach(m => m.classList.add('hidden'));
                 }
             });
+            setupPullToRefresh();
             // 註冊 PWA Service Worker
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('./sw.js').catch((err) => console.warn('SW register failed', err));
