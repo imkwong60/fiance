@@ -40,11 +40,7 @@
             padding-left: env(safe-area-inset-left, 0);
             padding-right: env(safe-area-inset-right, 0);
         }
-        #app-tabs {
-            top: calc(env(safe-area-inset-top, 0px) + var(--header-h, 7.5rem));
-        }
         @media (min-width: 640px) {
-            #app-tabs { top: calc(env(safe-area-inset-top, 0px) + 4rem); }
             #mobile-status-bar { display: none !important; }
         }
         @media (max-width: 639px) {
@@ -126,29 +122,28 @@
                 </button>
             </div>
         </div>
+        <!-- 分頁列緊貼 header，避免中間空白 -->
+        <div id="app-tabs" class="bg-white border-b border-slate-200">
+            <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+                <nav class="flex space-x-4 sm:space-x-6 overflow-x-auto">
+                    <button id="tab-holdings" onclick="switchTab('holdings')" class="py-2.5 sm:py-3 px-1 text-sm tab-active border-b-2 border-emerald-500 text-emerald-600 font-semibold whitespace-nowrap">
+                        <span class="flex items-center space-x-1.5"><i data-lucide="briefcase" class="w-4 h-4"></i><span>持倉</span></span>
+                    </button>
+                    <button id="tab-passive" onclick="switchTab('passive')" class="py-2.5 sm:py-3 px-1 text-sm text-slate-500 hover:text-slate-800 border-b-2 border-transparent whitespace-nowrap">
+                        <span class="flex items-center space-x-1.5"><i data-lucide="coins" class="w-4 h-4"></i><span>被動收入</span></span>
+                    </button>
+                    <button id="tab-property" onclick="switchTab('property')" class="py-2.5 sm:py-3 px-1 text-sm text-slate-500 hover:text-slate-800 border-b-2 border-transparent whitespace-nowrap">
+                        <span class="flex items-center space-x-1.5"><i data-lucide="home" class="w-4 h-4"></i><span>不動產</span></span>
+                    </button>
+                    <button id="tab-insurance" onclick="switchTab('insurance')" class="py-2.5 sm:py-3 px-1 text-sm text-slate-500 hover:text-slate-800 border-b-2 border-transparent whitespace-nowrap">
+                        <span class="flex items-center space-x-1.5"><i data-lucide="shield" class="w-4 h-4"></i><span>保險</span></span>
+                    </button>
+                </nav>
+            </div>
+        </div>
     </header>
 
-    <!-- Tabs -->
-    <div id="app-tabs" class="bg-white border-b border-slate-200 sticky z-30">
-        <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-            <nav class="flex space-x-4 sm:space-x-6 overflow-x-auto">
-                <button id="tab-holdings" onclick="switchTab('holdings')" class="py-2.5 sm:py-3 px-1 text-sm tab-active border-b-2 border-emerald-500 text-emerald-600 font-semibold whitespace-nowrap">
-                    <span class="flex items-center space-x-1.5"><i data-lucide="briefcase" class="w-4 h-4"></i><span>持倉</span></span>
-                </button>
-                <button id="tab-passive" onclick="switchTab('passive')" class="py-3 px-1 text-sm text-slate-500 hover:text-slate-800 border-b-2 border-transparent whitespace-nowrap">
-                    <span class="flex items-center space-x-1.5"><i data-lucide="coins" class="w-4 h-4"></i><span>被動收入統計</span></span>
-                </button>
-                <button id="tab-property" onclick="switchTab('property')" class="py-3 px-1 text-sm text-slate-500 hover:text-slate-800 border-b-2 border-transparent whitespace-nowrap">
-                    <span class="flex items-center space-x-1.5"><i data-lucide="home" class="w-4 h-4"></i><span>不動產</span></span>
-                </button>
-                <button id="tab-insurance" onclick="switchTab('insurance')" class="py-3 px-1 text-sm text-slate-500 hover:text-slate-800 border-b-2 border-transparent whitespace-nowrap">
-                    <span class="flex items-center space-x-1.5"><i data-lucide="shield" class="w-4 h-4"></i><span>保險</span></span>
-                </button>
-            </nav>
-        </div>
-    </div>
-
-    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 overflow-y-auto">
+    <main id="main-content" class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6 overflow-y-auto">
 
         <!-- ========== HOLDINGS VIEW ========== -->
         <div id="view-holdings">
@@ -1071,12 +1066,14 @@
             if (elM) { elM.className = cls + ' w-1.5 h-1.5 shrink-0'; elM.title = title; }
         }
 
-        async function bindEmailAndLoad(emailOverride) {
-            // 修復：onload 時彈窗未開，改用 currentEmail 或傳入值，不要只讀空 input
+        async function bindEmailAndLoad(emailOverride, options = {}) {
+            // silent: 自動載入時不彈多餘提示
+            const silent = !!options.silent;
+            // 修復：勿只讀空的 email-input；優先用傳入值 / 已綁定 Email
             const inputVal = document.getElementById('email-input')?.value?.trim()?.toLowerCase() || '';
             const email = (emailOverride || inputVal || currentEmail || '').trim().toLowerCase();
             if (!email || !email.includes('@')) {
-                if (!emailOverride) showToast('請輸入有效 Email', 'info');
+                if (!silent && !emailOverride) showToast('請輸入有效 Email', 'info');
                 return;
             }
             currentEmail = email;
@@ -1112,15 +1109,16 @@
                     renderProperties();
                     renderInsurance();
                     setSyncStatus('ok');
-                    showToast(`已從雲端載入資料`, 'success');
+                    if (!silent) showToast('已從雲端載入資料', 'success');
                 } else {
                     setSyncStatus('ok');
-                    showToast('雲端尚無資料，可點「儲存到雲端」上傳', 'info');
+                    if (!silent) showToast('雲端尚無資料，可點「儲存到雲端」上傳', 'info');
                 }
                 closeEmailModal();
             } catch (err) {
                 setSyncStatus('error');
-                showToast('載入失敗：' + (err.message || err), 'info');
+                if (!silent) showToast('載入失敗：' + (err.message || err), 'info');
+                else console.warn('自動雲端載入失敗', err);
             }
         }
         async function saveToCloud() {
@@ -1268,11 +1266,15 @@
         }
 
         // ========== Init ==========
-        // ========== 下拉更新（手機） ==========
+        // ========== 下拉更新 + 左右滑切換分頁 ==========
+        const TAB_ORDER = ['holdings', 'passive', 'property', 'insurance'];
         let ptrStartY = 0;
+        let ptrStartX = 0;
         let ptrPulling = false;
         let ptrRefreshing = false;
+        let swipeTracking = false;
         const PTR_THRESHOLD = 72;
+        const SWIPE_THRESHOLD = 56;
 
         function ptrSetUI(visible, text, spinning) {
             const ind = document.getElementById('ptr-indicator');
@@ -1307,54 +1309,79 @@
             }
         }
 
+        function switchTabBySwipe(direction) {
+            // direction: -1 下一頁（左滑），+1 上一頁（右滑）
+            const idx = TAB_ORDER.indexOf(currentTab);
+            if (idx < 0) return;
+            const next = idx - direction;
+            if (next < 0 || next >= TAB_ORDER.length) return;
+            switchTab(TAB_ORDER[next]);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
         function setupPullToRefresh() {
-            // 僅在接近頁面頂部時啟用，避免與表格橫滑衝突
             document.addEventListener('touchstart', (e) => {
                 if (ptrRefreshing) return;
-                if (window.scrollY > 5) return;
-                // 有 modal 開啟時不觸發
                 const openModal = document.querySelector('[id$="-modal"]:not(.hidden)');
                 if (openModal) return;
                 ptrStartY = e.touches[0].clientY;
-                ptrPulling = true;
+                ptrStartX = e.touches[0].clientX;
+                ptrPulling = window.scrollY <= 5;
+                swipeTracking = true;
             }, { passive: true });
 
             document.addEventListener('touchmove', (e) => {
-                if (!ptrPulling || ptrRefreshing) return;
-                if (window.scrollY > 5) {
-                    ptrPulling = false;
-                    ptrSetUI(false, '下拉更新', false);
-                    return;
-                }
+                if (ptrRefreshing || !swipeTracking) return;
                 const dy = e.touches[0].clientY - ptrStartY;
-                if (dy > 12) {
+                const dx = e.touches[0].clientX - ptrStartX;
+                // 垂直下拉更新（僅頁面頂部）
+                if (ptrPulling && window.scrollY <= 5 && Math.abs(dy) > Math.abs(dx) && dy > 12) {
                     const ready = dy >= PTR_THRESHOLD;
                     ptrSetUI(true, ready ? '放開即可更新' : '下拉更新', false);
+                } else if (window.scrollY > 5) {
+                    ptrPulling = false;
+                    ptrSetUI(false, '下拉更新', false);
                 }
             }, { passive: true });
 
             document.addEventListener('touchend', (e) => {
-                if (!ptrPulling || ptrRefreshing) return;
-                ptrPulling = false;
+                if (!swipeTracking || ptrRefreshing) return;
+                swipeTracking = false;
                 const dy = (e.changedTouches[0]?.clientY || 0) - ptrStartY;
-                if (window.scrollY <= 5 && dy >= PTR_THRESHOLD) {
+                const dx = (e.changedTouches[0]?.clientX || 0) - ptrStartX;
+
+                // 優先：明顯水平滑動 → 切換分頁
+                if (Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy) * 1.2) {
+                    ptrSetUI(false, '下拉更新', false);
+                    ptrPulling = false;
+                    // 左滑 dx<0 → 下一頁；右滑 dx>0 → 上一頁
+                    switchTabBySwipe(dx < 0 ? -1 : 1);
+                    return;
+                }
+
+                // 垂直下拉更新
+                if (ptrPulling && window.scrollY <= 5 && dy >= PTR_THRESHOLD && Math.abs(dy) > Math.abs(dx)) {
+                    ptrPulling = false;
                     pullToRefreshAll();
                 } else {
+                    ptrPulling = false;
                     ptrSetUI(false, '下拉更新', false);
                 }
             }, { passive: true });
         }
 
-        window.onload = function() {
+        // type="module" 為 deferred，window.onload 可能早已觸發 → 改為直接 init
+        function initApp() {
             updateEmailStatus();
             updateRateBadge();
             updateHeaderOffset();
             window.addEventListener('resize', updateHeaderOffset);
             fetchExchangeRates();
+            // 先顯示本機快取，再靜默拉取雲端覆蓋
             renderTable();
-            // 修復：用 currentEmail 直接載入，不依賴未開啟的 input
-            if (currentEmail) bindEmailAndLoad(currentEmail);
-            // ESC / 點遮罩關閉所有 modal
+            if (currentEmail) {
+                bindEmailAndLoad(currentEmail, { silent: true });
+            }
             document.querySelectorAll('[id$="-modal"]').forEach(modal => {
                 modal.addEventListener('click', (e) => {
                     if (e.target === modal) modal.classList.add('hidden');
@@ -1366,11 +1393,31 @@
                 }
             });
             setupPullToRefresh();
-            // 註冊 PWA Service Worker
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('./sw.js').catch((err) => console.warn('SW register failed', err));
             }
-        };
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initApp);
+        } else {
+            initApp();
+        }
+        window.addEventListener('pageshow', (e) => {
+            // 從背景／往返快取回到 App 時也自動同步
+            if (e.persisted && currentEmail) {
+                bindEmailAndLoad(currentEmail, { silent: true });
+            }
+        });
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && currentEmail) {
+                // 重新打開畫面時靜默刷新雲端（節流：至少間隔 30 秒）
+                const now = Date.now();
+                if (!window.__lastCloudPull || now - window.__lastCloudPull > 30000) {
+                    window.__lastCloudPull = now;
+                    bindEmailAndLoad(currentEmail, { silent: true });
+                }
+            }
+        });
 
         // ========== Toast ==========
         function showToast(message, type = 'success') {
