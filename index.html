@@ -12,8 +12,8 @@
     <title>J.Law Portfolio Tracking</title>
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="192x192" href="./apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="512x512" href="./apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -32,9 +32,21 @@
     <style>
         body { font-family: 'Inter', 'Microsoft JhengHei', 'PingFang TC', 'Noto Sans TC', ui-sans-serif, system-ui, sans-serif; }
         .tab-active { border-bottom: 2px solid #10b981; color: #059669; font-weight: 600; }
-        html, body { min-height: 100%; }
-        /* 頂部／底部安全區：避免遮住 iPhone 時間與底部橫條 */
-        body { padding-bottom: env(safe-area-inset-bottom, 0); }
+        /* 下拉過度捲動時顯示與頂欄相同的深色，避免露出白底 */
+        html {
+            min-height: 100%;
+            background-color: #0f172a;
+        }
+        body {
+            min-height: 100%;
+            background-color: #f8fafc;
+            padding-bottom: env(safe-area-inset-bottom, 0);
+            overscroll-behavior-y: none;
+        }
+        #main-content {
+            overscroll-behavior-y: contain;
+            -webkit-overflow-scrolling: touch;
+        }
         #app-header {
             padding-top: env(safe-area-inset-top, 0);
             padding-left: env(safe-area-inset-left, 0);
