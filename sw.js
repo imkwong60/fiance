@@ -2,7 +2,7 @@
 const CACHE = 'jlaw-portfolio-v1';
 const CORE = [
   './',
-  './J.Law_Portfolio_Tracking.html',
+  './index.html',
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png',
