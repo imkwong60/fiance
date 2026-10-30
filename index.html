@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="J.Law Portfolio">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="description" content="J.Law 持倉、被動收入、不動產與保險追蹤">
+    <meta name="description" content="J.Law 智慧持倉、被動收入、不動產與保險追蹤">
     <title>J.Law Portfolio Tracking</title>
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="apple-touch-icon" href="./apple-touch-icon.png">
@@ -52,7 +52,7 @@
             #exchange-rate-badge { display: none !important; }
             main { padding-left: 0.75rem; padding-right: 0.75rem; }
             .overflow-x-auto { -webkit-overflow-scrolling: touch; }
-            .overflow-x-auto table { min-width: 640px; }
+            /* 手機改卡片列表，不再強制表格最小寬度 */
             #view-holdings > .grid,
             #view-passive > .grid,
             #view-property > .grid,
@@ -74,7 +74,7 @@
                     </div>
                     <div class="min-w-0">
                         <h1 class="header-title-text text-base sm:text-xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-200 bg-clip-text text-transparent truncate">J.Law Portfolio Tracking</h1>
-                        <p class="header-sub-text text-xs text-slate-400">持倉 · 被動收入 · 不動產 · 保險</p>
+                        <p class="header-sub-text text-xs text-slate-400">智慧持倉 · 被動收入 · 不動產 · 保險</p>
                     </div>
                 </div>
                 <div class="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
@@ -241,7 +241,8 @@
                         </select>
                     </div>
                 </div>
-                <div class="overflow-x-auto">
+                <!-- 桌面：表格 -->
+                <div class="hidden md:block overflow-x-auto">
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="bg-slate-50 text-slate-500 text-xs font-semibold border-b border-slate-200 uppercase tracking-wider">
@@ -258,10 +259,12 @@
                         <tbody id="holdings-tbody" class="divide-y divide-slate-100 text-sm"></tbody>
                     </table>
                 </div>
+                <!-- 手機：卡片 -->
+                <div id="holdings-cards" class="md:hidden divide-y divide-slate-100"></div>
                 <div id="empty-state" class="hidden py-12 text-center text-slate-400">
                     <i data-lucide="folder-open" class="w-12 h-12 mx-auto mb-3 opacity-40"></i>
                     <p class="text-base font-medium">目前尚無任何持倉紀錄</p>
-                    <p class="text-xs text-slate-400 mt-1">點擊右上角「新增持倉」開始記錄</p>
+                    <p class="text-xs text-slate-400 mt-1">點擊右上角「＋」開始記錄</p>
                 </div>
             </div>
         </div>
@@ -320,7 +323,7 @@
                 <div class="pt-2 border-t border-slate-100">
                     <h4 class="text-sm font-bold text-slate-700 mb-1">各資產年回報（已收息）</h4>
                     <p class="text-xs text-slate-500 mb-3">僅顯示該年度（或全部）有入帳股息/債息的資產。年回報 = 該期已收息 ÷ 持倉成本（原幣成本換算 HKD）</p>
-                    <div class="overflow-x-auto">
+                    <div class="hidden md:block overflow-x-auto">
                         <table class="w-full text-left border-collapse">
                             <thead>
                                 <tr class="bg-slate-50 text-slate-500 text-xs font-semibold border-b border-slate-200 uppercase tracking-wider">
@@ -335,6 +338,7 @@
                             <tbody id="yearly-asset-yield-tbody" class="divide-y divide-slate-100 text-sm"></tbody>
                         </table>
                     </div>
+                    <div id="yearly-asset-yield-cards" class="md:hidden space-y-2"></div>
                     <div id="yearly-asset-yield-empty" class="hidden py-6 text-center text-sm text-slate-400">該期間尚無任何股息/債息入帳</div>
                 </div>
             </div>
@@ -348,7 +352,7 @@
                     </div>
                     <span id="income-record-count" class="bg-slate-100 text-slate-600 text-xs px-2.5 py-1 rounded-full font-medium">0 筆</span>
                 </div>
-                <div class="overflow-x-auto">
+                <div class="hidden md:block overflow-x-auto">
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="bg-slate-50 text-slate-500 text-xs font-semibold border-b border-slate-200 uppercase tracking-wider">
@@ -364,8 +368,9 @@
                         <tbody id="income-records-tbody" class="divide-y divide-slate-100 text-sm"></tbody>
                     </table>
                 </div>
+                <div id="income-records-cards" class="md:hidden divide-y divide-slate-100"></div>
                 <div id="income-empty" class="hidden py-10 text-center text-slate-400">
-                    <p>尚無入帳紀錄。請到「持倉明細」點各資產旁的 <strong>記息</strong> 按鈕新增。</p>
+                    <p>尚無入帳紀錄。請到「持倉」點各資產旁的記息按鈕新增。</p>
                 </div>
             </div>
 
@@ -425,7 +430,7 @@
                         <i data-lucide="plus" class="w-4 h-4"></i><span>新增物業</span>
                     </button>
                 </div>
-                <div class="overflow-x-auto">
+                <div class="hidden md:block overflow-x-auto">
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="bg-slate-50 text-slate-500 text-xs font-semibold border-b border-slate-200 uppercase tracking-wider">
@@ -444,6 +449,7 @@
                         <tbody id="property-tbody" class="divide-y divide-slate-100 text-sm"></tbody>
                     </table>
                 </div>
+                <div id="property-cards" class="md:hidden divide-y divide-slate-100"></div>
                 <div id="property-empty" class="hidden py-12 text-center text-slate-400">
                     <i data-lucide="home" class="w-12 h-12 mx-auto mb-3 opacity-40"></i>
                     <p class="text-base font-medium">尚未新增任何物業</p>
@@ -506,7 +512,7 @@
                         <i data-lucide="plus" class="w-4 h-4"></i><span>新增保單</span>
                     </button>
                 </div>
-                <div class="overflow-x-auto">
+                <div class="hidden md:block overflow-x-auto">
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="bg-slate-50 text-slate-500 text-xs font-semibold border-b border-slate-200 uppercase tracking-wider">
@@ -524,6 +530,7 @@
                         <tbody id="insurance-tbody" class="divide-y divide-slate-100 text-sm"></tbody>
                     </table>
                 </div>
+                <div id="insurance-cards" class="md:hidden divide-y divide-slate-100"></div>
                 <div id="insurance-empty" class="hidden py-12 text-center text-slate-400">
                     <i data-lucide="shield" class="w-12 h-12 mx-auto mb-3 opacity-40"></i>
                     <p class="text-base font-medium">尚未新增任何保單</p>
@@ -1735,8 +1742,10 @@
             document.getElementById('ins-badge-count').innerText = `${policies.length} 筆`;
 
             const tbody = document.getElementById('insurance-tbody');
+            const cards = document.getElementById('insurance-cards');
             const emptyEl = document.getElementById('insurance-empty');
             tbody.innerHTML = '';
+            if (cards) cards.innerHTML = '';
             emptyEl.classList.toggle('hidden', policies.length > 0);
 
             policies.forEach(p => {
@@ -1755,7 +1764,7 @@
                     <td class="py-3 px-4 text-right text-amber-700">${escapeHtml(p.currency)} ${fmtMoney(p.premium || 0)}</td>
                     <td class="py-3 px-4 text-right text-indigo-600">${escapeHtml(p.currency)} ${fmtMoney(p.cashValue || 0)}</td>
                     <td class="py-3 px-4 text-xs text-slate-500">
-                        ${p.startDate || '—'}<br>${p.endDate ? '→ ' + p.endDate : ''}
+                        ${escapeHtml(p.startDate || '—')}<br>${p.endDate ? '→ ' + escapeHtml(p.endDate) : ''}
                     </td>
                     <td class="py-3 px-4"><span class="px-2 py-0.5 rounded text-xs font-medium ${statusCls}">${INS_STATUS_LABEL[p.status] || p.status}</span></td>
                     <td class="py-3 px-4 text-center">
@@ -1765,6 +1774,33 @@
                         </div>
                     </td>`;
                 tbody.appendChild(tr);
+
+                if (cards) {
+                    const card = document.createElement('div');
+                    card.className = 'p-4 space-y-2';
+                    card.innerHTML = `
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="min-w-0">
+                                <div class="font-semibold text-slate-900">${escapeHtml(p.name)}</div>
+                                <div class="text-xs text-slate-500">${escapeHtml(p.insurer || '')}${p.policyNo ? ' · ' + escapeHtml(p.policyNo) : ''}</div>
+                            </div>
+                            <span class="px-2 py-0.5 rounded text-[11px] font-medium shrink-0 ${statusCls}">${INS_STATUS_LABEL[p.status] || p.status}</span>
+                        </div>
+                        <div class="flex flex-wrap gap-1.5 text-[11px]">
+                            <span class="px-2 py-0.5 rounded bg-sky-100 text-sky-800">${INS_TYPE_LABEL[p.type] || escapeHtml(p.type)}</span>
+                            ${p.insured ? `<span class="px-2 py-0.5 rounded bg-slate-100 text-slate-600">受保: ${escapeHtml(p.insured)}</span>` : ''}
+                        </div>
+                        <div class="grid grid-cols-3 gap-2 text-sm">
+                            <div><div class="text-[11px] text-slate-400">保額</div><div class="font-medium">${escapeHtml(p.currency)} ${fmtMoney(p.cover||0)}</div></div>
+                            <div><div class="text-[11px] text-slate-400">年繳</div><div class="text-amber-700">${escapeHtml(p.currency)} ${fmtMoney(p.premium||0)}</div></div>
+                            <div><div class="text-[11px] text-slate-400">現金價值</div><div class="text-indigo-600">${escapeHtml(p.currency)} ${fmtMoney(p.cashValue||0)}</div></div>
+                        </div>
+                        <div class="flex justify-end space-x-1 pt-1 border-t border-slate-50">
+                            <button onclick="openInsuranceModal('${p.id}')" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 text-slate-600">編輯</button>
+                            <button onclick="deleteInsurance('${p.id}')" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-rose-50 text-rose-600">刪除</button>
+                        </div>`;
+                    cards.appendChild(card);
+                }
             });
             lucide.createIcons();
         }
@@ -1910,6 +1946,9 @@
             document.getElementById('holdings-div-yield').innerText = `${divYield.toFixed(2)}%`;
             document.getElementById('holdings-lifetime-div').innerText = `$${Math.round(lifeDiv).toLocaleString()}`;
 
+            const cards = document.getElementById('holdings-cards');
+            if (cards) cards.innerHTML = '';
+
             filtered.forEach(h => {
                 const cur = h.currentPrice ?? h.buyPrice;
                 const mvCur = h.quantity * cur;
@@ -1918,6 +1957,8 @@
                 const pnlPct = costCur > 0 ? (pnlCur / costCur) * 100 : 0;
                 const mvHKD = convertToHKD(mvCur, h.currency);
                 const receivedForH = incomeRecords.filter(r => r.holdingId === h.id).reduce((s, r) => s + r.amount, 0);
+                const typeLabel = h.type === 'HK' ? '港股' : h.type === 'US' ? '美股' : '債券/基金';
+                const typeCls = h.type === 'HK' ? 'bg-amber-100 text-amber-800' : h.type === 'US' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800';
 
                 const tr = document.createElement('tr');
                 tr.className = 'hover:bg-slate-50/80 transition border-b border-slate-100';
@@ -1928,33 +1969,53 @@
                         ${receivedForH > 0 ? `<div class="text-[11px] text-indigo-600 mt-0.5">已收: ${escapeHtml(h.currency)} ${receivedForH.toLocaleString(undefined,{maximumFractionDigits:0})}</div>` : ''}
                     </td>
                     <td class="py-4 px-4">
-                        <span class="px-2.5 py-0.5 rounded-lg text-xs font-semibold w-max ${h.type === 'HK' ? 'bg-amber-100 text-amber-800' : h.type === 'US' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}">
-                            ${h.type === 'HK' ? '港股' : h.type === 'US' ? '美股' : '債券/基金'}
-                        </span>
-                        ${h.matureDate ? `<div class="text-xs text-slate-500 mt-1">到期: ${h.matureDate}</div>` : ''}
+                        <span class="px-2.5 py-0.5 rounded-lg text-xs font-semibold w-max ${typeCls}">${typeLabel}</span>
+                        ${h.matureDate ? `<div class="text-xs text-slate-500 mt-1">到期: ${escapeHtml(h.matureDate)}</div>` : ''}
                     </td>
                     <td class="py-4 px-4 text-right font-medium">${h.quantity.toLocaleString()}</td>
-                    <td class="py-4 px-4 text-right text-slate-600">${h.currency} ${h.buyPrice.toFixed(2)}</td>
-                    <td class="py-4 px-4 text-right font-medium">${h.currency} ${cur.toFixed(2)}</td>
-                    <td class="py-4 px-4 text-right font-bold">$${mvHKD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td class="py-4 px-4 text-right text-slate-600">${escapeHtml(h.currency)} ${h.buyPrice.toFixed(2)}</td>
+                    <td class="py-4 px-4 text-right font-medium">${escapeHtml(h.currency)} ${cur.toFixed(2)}</td>
+                    <td class="py-4 px-4 text-right font-bold">$${fmtMoney(mvHKD)}</td>
                     <td class="py-4 px-4 text-right">
-                        <div class="font-semibold ${pnlCur >= 0 ? 'text-emerald-600' : 'text-rose-600'}">${pnlCur >= 0 ? '+' : ''}${h.currency} ${pnlCur.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                        <div class="font-semibold ${pnlCur >= 0 ? 'text-emerald-600' : 'text-rose-600'}">${pnlCur >= 0 ? '+' : ''}${escapeHtml(h.currency)} ${fmtMoney(pnlCur)}</div>
                         <div class="text-xs ${pnlPct >= 0 ? 'text-emerald-500' : 'text-rose-500'}">(${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%)</div>
                     </td>
                     <td class="py-4 px-4 text-center">
                         <div class="flex items-center justify-center space-x-0.5">
-                            <button onclick="openIncomeModal('${h.id}')" class="p-1.5 hover:bg-emerald-100 rounded-lg text-emerald-700 transition" title="記錄股息/債息">
-                                <i data-lucide="banknote" class="w-4 h-4"></i>
-                            </button>
-                            <button onclick="openAddModal('${h.id}')" class="p-1.5 hover:bg-slate-200 rounded-lg text-slate-600 transition" title="編輯">
-                                <i data-lucide="edit-3" class="w-4 h-4"></i>
-                            </button>
-                            <button onclick="deleteHolding('${h.id}')" class="p-1.5 hover:bg-rose-100 rounded-lg text-rose-600 transition" title="刪除">
-                                <i data-lucide="trash-2" class="w-4 h-4"></i>
-                            </button>
+                            <button onclick="openIncomeModal('${h.id}')" class="p-1.5 hover:bg-emerald-100 rounded-lg text-emerald-700 transition" title="記錄股息/債息"><i data-lucide="banknote" class="w-4 h-4"></i></button>
+                            <button onclick="openAddModal('${h.id}')" class="p-1.5 hover:bg-slate-200 rounded-lg text-slate-600 transition" title="編輯"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
+                            <button onclick="deleteHolding('${h.id}')" class="p-1.5 hover:bg-rose-100 rounded-lg text-rose-600 transition" title="刪除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                         </div>
                     </td>`;
                 tbody.appendChild(tr);
+
+                if (cards) {
+                    const card = document.createElement('div');
+                    card.className = 'p-4 space-y-3';
+                    card.innerHTML = `
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="min-w-0">
+                                <div class="font-bold text-slate-900">${escapeHtml(h.ticker)}</div>
+                                <div class="text-xs text-slate-500 truncate">${escapeHtml(h.name)}</div>
+                            </div>
+                            <span class="px-2 py-0.5 rounded-lg text-[11px] font-semibold shrink-0 ${typeCls}">${typeLabel}</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-sm">
+                            <div><div class="text-[11px] text-slate-400">數量</div><div class="font-medium">${h.quantity.toLocaleString()}</div></div>
+                            <div class="text-right"><div class="text-[11px] text-slate-400">市值 (HKD)</div><div class="font-bold">$${fmtMoney(mvHKD)}</div></div>
+                            <div><div class="text-[11px] text-slate-400">成本 / 現價</div><div class="text-slate-700">${escapeHtml(h.currency)} ${h.buyPrice.toFixed(2)} → ${cur.toFixed(2)}</div></div>
+                            <div class="text-right"><div class="text-[11px] text-slate-400">盈虧</div>
+                                <div class="font-semibold ${pnlCur >= 0 ? 'text-emerald-600' : 'text-rose-600'}">${pnlCur >= 0 ? '+' : ''}${escapeHtml(h.currency)} ${fmtMoney(pnlCur)} <span class="text-xs">(${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%)</span></div>
+                            </div>
+                        </div>
+                        ${receivedForH > 0 ? `<div class="text-[11px] text-indigo-600">已收息: ${escapeHtml(h.currency)} ${receivedForH.toLocaleString(undefined,{maximumFractionDigits:0})}</div>` : ''}
+                        <div class="flex items-center justify-end space-x-1 pt-1 border-t border-slate-50">
+                            <button onclick="openIncomeModal('${h.id}')" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-50 text-emerald-700 flex items-center space-x-1"><i data-lucide="banknote" class="w-3.5 h-3.5"></i><span>記息</span></button>
+                            <button onclick="openAddModal('${h.id}')" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 text-slate-600 flex items-center space-x-1"><i data-lucide="edit-3" class="w-3.5 h-3.5"></i><span>編輯</span></button>
+                            <button onclick="deleteHolding('${h.id}')" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-rose-50 text-rose-600 flex items-center space-x-1"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i><span>刪除</span></button>
+                        </div>`;
+                    cards.appendChild(card);
+                }
             });
             lucide.createIcons();
         }
@@ -2033,8 +2094,10 @@
             });
 
             const yieldBody = document.getElementById('yearly-asset-yield-tbody');
+            const yieldCards = document.getElementById('yearly-asset-yield-cards');
             const yieldEmpty = document.getElementById('yearly-asset-yield-empty');
             yieldBody.innerHTML = '';
+            if (yieldCards) yieldCards.innerHTML = '';
             const assetRows = Object.values(assetAgg).sort((a, b) => b.receivedHKD - a.receivedHKD);
             yieldEmpty.classList.toggle('hidden', assetRows.length > 0);
 
@@ -2050,40 +2113,64 @@
                 tr.className = 'hover:bg-slate-50/80 transition';
                 tr.innerHTML = `
                     <td class="py-2.5 px-3">
-                        <div class="font-semibold text-slate-900">${row.ticker}</div>
-                        <div class="text-xs text-slate-500">${row.name}</div>
+                        <div class="font-semibold text-slate-900">${escapeHtml(row.ticker)}</div>
+                        <div class="text-xs text-slate-500">${escapeHtml(row.name)}</div>
                     </td>
                     <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded text-xs font-medium ${typeCls}">${typeLabel}</span></td>
-                    <td class="py-2.5 px-3 text-right text-slate-600">${costHKD > 0 ? '$' + costHKD.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '—'}</td>
-                    <td class="py-2.5 px-3 text-right font-semibold text-emerald-600">$${row.receivedHKD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td class="py-2.5 px-3 text-right text-slate-600">${costHKD > 0 ? '$' + Math.round(costHKD).toLocaleString() : '—'}</td>
+                    <td class="py-2.5 px-3 text-right font-semibold text-emerald-600">$${fmtMoney(row.receivedHKD)}</td>
                     <td class="py-2.5 px-3 text-right font-bold ${yld != null ? (yld >= 0 ? 'text-emerald-600' : 'text-rose-600') : 'text-slate-400'}">${yld != null ? yld.toFixed(2) + '%' : '—'}</td>
                     <td class="py-2.5 px-3 text-right text-slate-500">${row.count}</td>`;
                 yieldBody.appendChild(tr);
+
+                if (yieldCards) {
+                    const card = document.createElement('div');
+                    card.className = 'bg-slate-50 border border-slate-100 rounded-xl p-3';
+                    card.innerHTML = `
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="min-w-0">
+                                <div class="font-semibold text-slate-900 text-sm">${escapeHtml(row.ticker)}</div>
+                                <div class="text-xs text-slate-500 truncate">${escapeHtml(row.name)}</div>
+                            </div>
+                            <div class="text-right shrink-0">
+                                <div class="font-bold ${yld != null ? 'text-emerald-600' : 'text-slate-400'}">${yld != null ? yld.toFixed(2) + '%' : '—'}</div>
+                                <div class="text-[10px] text-slate-400">年回報</div>
+                            </div>
+                        </div>
+                        <div class="mt-2 flex justify-between text-xs text-slate-600">
+                            <span>已收 $${fmtMoney(row.receivedHKD)} · ${row.count} 筆</span>
+                            <span class="px-1.5 py-0.5 rounded ${typeCls}">${typeLabel}</span>
+                        </div>`;
+                    yieldCards.appendChild(card);
+                }
             });
 
             const tbody = document.getElementById('income-records-tbody');
+            const incomeCards = document.getElementById('income-records-cards');
             const emptyEl = document.getElementById('income-empty');
             tbody.innerHTML = '';
+            if (incomeCards) incomeCards.innerHTML = '';
             document.getElementById('income-record-count').innerText = `${records.length} 筆`;
             emptyEl.classList.toggle('hidden', records.length > 0);
 
             records.forEach(r => {
                 const hkd = convertToHKD(r.amount, r.currency);
+                const orphan = !holdings.find(x => x.id === r.holdingId);
                 const tr = document.createElement('tr');
                 tr.className = 'hover:bg-slate-50/80 transition';
                 tr.innerHTML = `
                     <td class="py-3 px-4 font-medium">${escapeHtml(r.date || '—')}</td>
                     <td class="py-3 px-4">
                         <div class="font-semibold">${escapeHtml(r.ticker)}</div>
-                        <div class="text-xs text-slate-500">${escapeHtml(r.name || '')}${!holdings.find(x => x.id === r.holdingId) ? ' <span class="text-amber-600">（持倉已刪）</span>' : ''}</div>
+                        <div class="text-xs text-slate-500">${escapeHtml(r.name || '')}${orphan ? ' <span class="text-amber-600">（持倉已刪）</span>' : ''}</div>
                     </td>
                     <td class="py-3 px-4">
                         <span class="px-2 py-0.5 rounded text-xs font-medium ${r.type === 'HK' ? 'bg-amber-100 text-amber-800' : r.type === 'US' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}">
                             ${r.type === 'HK' ? '港股' : r.type === 'US' ? '美股' : '債券/其他'}
                         </span>
                     </td>
-                    <td class="py-3 px-4 text-right">${r.currency} ${r.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                    <td class="py-3 px-4 text-right font-semibold text-emerald-600">$${hkd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td class="py-3 px-4 text-right">${escapeHtml(r.currency)} ${fmtMoney(r.amount)}</td>
+                    <td class="py-3 px-4 text-right font-semibold text-emerald-600">$${fmtMoney(hkd)}</td>
                     <td class="py-3 px-4 text-slate-500 text-xs">${escapeHtml(r.note || '—')}</td>
                     <td class="py-3 px-4 text-center">
                         <button onclick="deleteIncomeRecord('${r.id}')" class="p-1.5 hover:bg-rose-100 rounded-lg text-rose-600" title="刪除">
@@ -2091,6 +2178,23 @@
                         </button>
                     </td>`;
                 tbody.appendChild(tr);
+
+                if (incomeCards) {
+                    const card = document.createElement('div');
+                    card.className = 'p-4 flex items-start justify-between gap-3';
+                    card.innerHTML = `
+                        <div class="min-w-0 space-y-0.5">
+                            <div class="text-xs text-slate-400">${escapeHtml(r.date || '—')}</div>
+                            <div class="font-semibold text-slate-900">${escapeHtml(r.ticker)} ${orphan ? '<span class="text-amber-600 text-xs font-normal">（已刪）</span>' : ''}</div>
+                            <div class="text-xs text-slate-500">${escapeHtml(r.name || '')}${r.note ? ' · ' + escapeHtml(r.note) : ''}</div>
+                        </div>
+                        <div class="text-right shrink-0">
+                            <div class="font-bold text-emerald-600">$${fmtMoney(hkd)}</div>
+                            <div class="text-xs text-slate-500">${escapeHtml(r.currency)} ${fmtMoney(r.amount)}</div>
+                            <button onclick="deleteIncomeRecord('${r.id}')" class="mt-1 text-xs text-rose-600">刪除</button>
+                        </div>`;
+                    incomeCards.appendChild(card);
+                }
             });
             lucide.createIcons();
         }
@@ -2117,8 +2221,10 @@
 
             document.getElementById('prop-badge-count').innerText = `${properties.length} 筆`;
             const tbody = document.getElementById('property-tbody');
+            const cards = document.getElementById('property-cards');
             const emptyEl = document.getElementById('property-empty');
             tbody.innerHTML = '';
+            if (cards) cards.innerHTML = '';
             emptyEl.classList.toggle('hidden', properties.length > 0);
 
             properties.forEach(p => {
@@ -2147,6 +2253,32 @@
                         </div>
                     </td>`;
                 tbody.appendChild(tr);
+
+                if (cards) {
+                    const card = document.createElement('div');
+                    card.className = 'p-4 space-y-2';
+                    card.innerHTML = `
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="min-w-0">
+                                <div class="font-semibold text-slate-900">${escapeHtml(p.name)}</div>
+                                ${p.buyDate ? `<div class="text-xs text-slate-500">買入: ${escapeHtml(p.buyDate)}</div>` : ''}
+                            </div>
+                            <div class="text-right shrink-0">
+                                <div class="text-xs text-slate-400">淨收益率</div>
+                                <div class="font-bold text-emerald-600">${yld.toFixed(2)}%</div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-sm">
+                            <div><div class="text-[11px] text-slate-400">買入 / 市值</div><div>${escapeHtml(p.currency)} ${fmtMoney(p.buyPrice)} → ${fmtMoney(p.currentValue)}</div></div>
+                            <div class="text-right"><div class="text-[11px] text-slate-400">年淨收入</div><div class="font-semibold text-emerald-600">${escapeHtml(p.currency)} ${fmtMoney(net)}</div></div>
+                            <div class="col-span-2 text-xs text-slate-500">租金 ${fmtMoney(p.annualRent||0)} − 管理 ${fmtMoney(p.mgmtFee||0)} − 差餉 ${fmtMoney(p.rates||0)} − 其他 ${fmtMoney(p.otherExp||0)}</div>
+                        </div>
+                        <div class="flex justify-end space-x-1 pt-1 border-t border-slate-50">
+                            <button onclick="openPropertyModal('${p.id}')" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 text-slate-600">編輯</button>
+                            <button onclick="deleteProperty('${p.id}')" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-rose-50 text-rose-600">刪除</button>
+                        </div>`;
+                    cards.appendChild(card);
+                }
             });
             lucide.createIcons();
         }
