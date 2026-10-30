@@ -1,5 +1,5 @@
 /* J.Law Portfolio Tracking — Service Worker */
-const CACHE = 'jlaw-portfolio-v1';
+const CACHE = 'jlaw-portfolio-v2';
 const CORE = [
   './',
   './index.html',
