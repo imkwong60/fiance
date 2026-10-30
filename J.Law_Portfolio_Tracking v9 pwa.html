@@ -1,0 +1,2083 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="J.Law Portfolio">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="description" content="J.Law 智慧持倉、被動收入、不動產與保險追蹤">
+    <title>J.Law Portfolio Tracking</title>
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: { 50: '#f0fdf4', 100: '#dcfce7', 500: '#22c55e', 600: '#16a34a', 700: '#15803d' }
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: 'Inter', 'Microsoft JhengHei', 'PingFang TC', 'Noto Sans TC', ui-sans-serif, system-ui, sans-serif; }
+        .tab-active { border-bottom: 2px solid #10b981; color: #059669; font-weight: 600; }
+        /* 手機直向：安全區、較大觸控、表格可橫滑提示 */
+        html, body { min-height: 100%; }
+        body { padding-bottom: env(safe-area-inset-bottom, 0); }
+        header { padding-left: env(safe-area-inset-left, 0); padding-right: env(safe-area-inset-right, 0); }
+        @media (max-width: 640px) {
+            header .max-w-7xl { height: auto; min-height: 3.5rem; padding-top: 0.5rem; padding-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem; }
+            #exchange-rate-badge { display: none !important; }
+            main { padding-left: 0.75rem; padding-right: 0.75rem; }
+            .overflow-x-auto { -webkit-overflow-scrolling: touch; }
+            .overflow-x-auto table { min-width: 640px; }
+            /* 摘要卡片在手機改單欄更易讀 */
+            #view-holdings > .grid,
+            #view-passive > .grid,
+            #view-property > .grid,
+            #view-insurance > .grid { gap: 0.75rem; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 h-full flex flex-col">
+
+    <header class="bg-slate-900 text-white shadow-md sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="bg-emerald-500 p-2 rounded-xl text-slate-900 font-bold shadow-lg flex items-center justify-center">
+                    <i data-lucide="trending-up" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-200 bg-clip-text text-transparent">J.Law Portfolio Tracking</h1>
+                    <p class="text-xs text-slate-400">智慧持倉 · 被動收入 · 不動產 · Supabase 雲端</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2 sm:space-x-3">
+                <div class="hidden sm:flex items-center space-x-2 bg-slate-800 px-3 py-1.5 rounded-lg text-xs border border-slate-700">
+                    <span id="sync-status-dot" class="inline-block w-2 h-2 rounded-full bg-slate-500" title="未同步"></span>
+                    <i data-lucide="mail" class="w-3.5 h-3.5 text-slate-400"></i>
+                    <span id="email-status" class="text-slate-300 max-w-[140px] truncate">未綁定 Email</span>
+                </div>
+                <button type="button" onclick="openRateModal()" id="exchange-rate-badge" title="點擊可查看 / 手動設定匯率" class="hidden md:flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg text-xs border border-slate-700 transition cursor-pointer">
+                    <span id="rate-status-dot" class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span class="text-slate-300">USD</span>
+                    <span id="usd-hkd-rate" class="font-semibold text-emerald-400">—</span>
+                    <span class="text-slate-600">|</span>
+                    <span class="text-slate-300">CNY</span>
+                    <span id="cny-hkd-rate" class="font-semibold text-sky-400">—</span>
+                </button>
+                <button onclick="openEmailModal()" title="雲端同步" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2.5 rounded-xl border border-slate-700 shadow-sm transition flex items-center justify-center" aria-label="雲端同步">
+                    <i data-lucide="cloud" class="w-4 h-4"></i>
+                </button>
+                <button onclick="exportToJson()" title="匯出 JSON" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2.5 rounded-xl border border-slate-700 shadow-sm transition flex items-center justify-center" aria-label="匯出">
+                    <i data-lucide="upload" class="w-4 h-4"></i>
+                </button>
+                <button onclick="triggerImport()" title="匯入 JSON" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2.5 rounded-xl border border-slate-700 shadow-sm transition flex items-center justify-center" aria-label="匯入">
+                    <i data-lucide="download" class="w-4 h-4"></i>
+                </button>
+                <input type="file" id="import-file-input" accept=".json" class="hidden" onchange="handleFileImport(event)">
+                <button onclick="refreshAllPrices()" id="refresh-prices-btn" title="更新現價" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2.5 rounded-xl border border-slate-700 shadow-sm transition flex items-center justify-center" aria-label="更新現價">
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                </button>
+                <button id="header-add-btn" onclick="headerAddAction()" title="新增" class="bg-emerald-600 hover:bg-emerald-500 text-white p-2.5 rounded-xl shadow-sm transition flex items-center justify-center" aria-label="新增">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Tabs -->
+    <div class="bg-white border-b border-slate-200 sticky top-16 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <nav class="flex space-x-6 overflow-x-auto">
+                <button id="tab-holdings" onclick="switchTab('holdings')" class="py-3 px-1 text-sm tab-active border-b-2 border-emerald-500 text-emerald-600 font-semibold whitespace-nowrap">
+                    <span class="flex items-center space-x-1.5"><i data-lucide="briefcase" class="w-4 h-4"></i><span>持倉明細</span></span>
+                </button>
+                <button id="tab-passive" onclick="switchTab('passive')" class="py-3 px-1 text-sm text-slate-500 hover:text-slate-800 border-b-2 border-transparent whitespace-nowrap">
+                    <span class="flex items-center space-x-1.5"><i data-lucide="coins" class="w-4 h-4"></i><span>被動收入統計</span></span>
+                </button>
+                <button id="tab-property" onclick="switchTab('property')" class="py-3 px-1 text-sm text-slate-500 hover:text-slate-800 border-b-2 border-transparent whitespace-nowrap">
+                    <span class="flex items-center space-x-1.5"><i data-lucide="home" class="w-4 h-4"></i><span>不動產</span></span>
+                </button>
+                <button id="tab-insurance" onclick="switchTab('insurance')" class="py-3 px-1 text-sm text-slate-500 hover:text-slate-800 border-b-2 border-transparent whitespace-nowrap">
+                    <span class="flex items-center space-x-1.5"><i data-lucide="shield" class="w-4 h-4"></i><span>保險</span></span>
+                </button>
+            </nav>
+        </div>
+    </div>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 overflow-y-auto">
+
+        <!-- ========== HOLDINGS VIEW ========== -->
+        <div id="view-holdings">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex items-center justify-between text-slate-500 text-sm font-medium mb-1">
+                        <span>總資產市值 (HKD)</span>
+                        <i data-lucide="wallet" class="w-5 h-5 text-emerald-600"></i>
+                    </div>
+                    <div id="total-value" class="text-2xl font-bold text-slate-900">$0.00</div>
+                    <div id="total-cost" class="text-xs text-slate-400 mt-1">總成本: $0.00</div>
+                    <div class="mt-3 pt-3 border-t border-slate-100 grid grid-cols-3 gap-1 text-[11px]">
+                        <div class="bg-amber-50 p-1.5 rounded-lg text-center">
+                            <div class="text-amber-700 font-semibold">港股</div>
+                            <div id="hk-value-summary" class="font-bold text-slate-800 truncate">$0</div>
+                        </div>
+                        <div class="bg-blue-50 p-1.5 rounded-lg text-center">
+                            <div class="text-blue-700 font-semibold">美股</div>
+                            <div id="us-value-summary" class="font-bold text-slate-800 truncate">$0</div>
+                        </div>
+                        <div class="bg-purple-50 p-1.5 rounded-lg text-center">
+                            <div class="text-purple-700 font-semibold">債券/其他</div>
+                            <div id="other-value-summary" class="font-bold text-slate-800 truncate">$0</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex items-center justify-between text-slate-500 text-sm font-medium mb-1">
+                        <span>總盈虧金額 (HKD)</span>
+                        <i data-lucide="dollar-sign" class="w-5 h-5 text-blue-600"></i>
+                    </div>
+                    <div id="total-pnl" class="text-2xl font-bold text-slate-900">$0.00</div>
+                    <div id="total-pnl-percent" class="text-xs text-slate-400 mt-1">報酬率: 0.00%</div>
+                    <div class="mt-3 pt-3 border-t border-slate-100 grid grid-cols-3 gap-1 text-[11px]">
+                        <div class="bg-amber-50 p-1.5 rounded-lg text-center">
+                            <div class="text-amber-700 font-semibold">港股盈虧</div>
+                            <div id="hk-pnl-summary" class="font-bold truncate">$0</div>
+                        </div>
+                        <div class="bg-blue-50 p-1.5 rounded-lg text-center">
+                            <div class="text-blue-700 font-semibold">美股盈虧</div>
+                            <div id="us-pnl-summary" class="font-bold truncate">$0</div>
+                        </div>
+                        <div class="bg-purple-50 p-1.5 rounded-lg text-center">
+                            <div class="text-purple-700 font-semibold">債券盈虧</div>
+                            <div id="other-pnl-summary" class="font-bold truncate">$0</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex items-center justify-between text-slate-500 text-sm font-medium mb-1">
+                        <span>每月被動收入 (HKD)</span>
+                        <i data-lucide="calendar" class="w-5 h-5 text-teal-500"></i>
+                    </div>
+                    <div id="holdings-monthly-div" class="text-2xl font-bold text-emerald-600">$0.00</div>
+                    <div class="text-xs text-slate-400 mt-1">近 12 個月已收 ÷ 12</div>
+                    <div class="mt-3 pt-3 border-t border-slate-100 text-[11px] text-slate-500">
+                        本年已收：<span id="holdings-ytd-div" class="font-semibold text-slate-800">$0</span>
+                    </div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex items-center justify-between text-slate-500 text-sm font-medium mb-1">
+                        <span>被動收入回報率</span>
+                        <i data-lucide="percent" class="w-5 h-5 text-indigo-500"></i>
+                    </div>
+                    <div id="holdings-div-yield" class="text-2xl font-bold text-indigo-600">0.00%</div>
+                    <div class="text-xs text-slate-400 mt-1">近 12 個月已收 ÷ 持倉總成本</div>
+                    <div class="mt-3 pt-3 border-t border-slate-100 text-[11px] text-slate-500">
+                        歷史總入帳：<span id="holdings-lifetime-div" class="font-semibold text-slate-800">$0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mt-6">
+                <div class="p-5 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div class="flex items-center space-x-3 flex-wrap">
+                        <h2 class="text-lg font-bold text-slate-800">持倉明細列表</h2>
+                        <span id="holding-badge-count" class="bg-slate-100 text-slate-600 text-xs px-2.5 py-1 rounded-full font-medium">0 筆</span>
+                        <span id="total-holdings-count" class="bg-emerald-50 text-emerald-700 text-xs px-2.5 py-1 rounded-full font-medium border border-emerald-100">共 0 筆持倉</span>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                        <div class="relative flex-1 sm:flex-initial">
+                            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-2.5 text-slate-400"></i>
+                            <input type="text" id="search-input" oninput="renderTable()" placeholder="搜尋代號或名稱..." class="pl-9 pr-4 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full sm:w-64">
+                        </div>
+                        <select id="filter-type" onchange="renderTable()" class="py-1.5 px-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <option value="ALL">所有資產類型</option>
+                            <option value="HK">港股 (HK)</option>
+                            <option value="US">美股 (US)</option>
+                            <option value="OTHER">債券/基金/其他</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-500 text-xs font-semibold border-b border-slate-200 uppercase tracking-wider">
+                                <th class="py-3.5 px-4">資產 / 代號</th>
+                                <th class="py-3.5 px-4">類型 / 到期日</th>
+                                <th class="py-3.5 px-4 text-right">持有數量</th>
+                                <th class="py-3.5 px-4 text-right">平均成本</th>
+                                <th class="py-3.5 px-4 text-right">現價</th>
+                                <th class="py-3.5 px-4 text-right">市值 (HKD)</th>
+                                <th class="py-3.5 px-4 text-right">未實現盈虧</th>
+                                <th class="py-3.5 px-4 text-center">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="holdings-tbody" class="divide-y divide-slate-100 text-sm"></tbody>
+                    </table>
+                </div>
+                <div id="empty-state" class="hidden py-12 text-center text-slate-400">
+                    <i data-lucide="folder-open" class="w-12 h-12 mx-auto mb-3 opacity-40"></i>
+                    <p class="text-base font-medium">目前尚無任何持倉紀錄</p>
+                    <p class="text-xs text-slate-400 mt-1">點擊右上角「新增持倉」開始記錄</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== PASSIVE INCOME VIEW ========== -->
+        <div id="view-passive" class="hidden space-y-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex items-center justify-between text-slate-500 text-sm font-medium mb-1">
+                        <span>本年度已收 (HKD)</span>
+                        <i data-lucide="calendar-check" class="w-5 h-5 text-blue-500"></i>
+                    </div>
+                    <div id="passive-ytd-total" class="text-2xl font-bold text-emerald-600">$0.00</div>
+                    <div class="text-xs text-slate-400 mt-1" id="passive-ytd-label">今年實際入帳</div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex items-center justify-between text-slate-500 text-sm font-medium mb-1">
+                        <span>本月已收 (HKD)</span>
+                        <i data-lucide="calendar" class="w-5 h-5 text-teal-500"></i>
+                    </div>
+                    <div id="passive-mtd-total" class="text-2xl font-bold text-slate-900">$0.00</div>
+                    <div class="text-xs text-slate-400 mt-1" id="passive-mtd-label">本月實際入帳</div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex items-center justify-between text-slate-500 text-sm font-medium mb-1">
+                        <span>歷史已收總額 (HKD)</span>
+                        <i data-lucide="piggy-bank" class="w-5 h-5 text-indigo-500"></i>
+                    </div>
+                    <div id="passive-received-total" class="text-2xl font-bold text-indigo-600">$0.00</div>
+                    <div class="text-xs text-slate-400 mt-1">所有股息/債息紀錄合計</div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex items-center justify-between text-slate-500 text-sm font-medium mb-1">
+                        <span>有收息資產 / 入帳筆數</span>
+                        <i data-lucide="list-checks" class="w-5 h-5 text-purple-500"></i>
+                    </div>
+                    <div class="text-2xl font-bold text-slate-900">
+                        <span id="passive-asset-count">0</span>
+                        <span class="text-slate-400 text-lg font-normal"> / </span>
+                        <span id="passive-record-count-card">0</span>
+                    </div>
+                    <div class="text-xs text-slate-400 mt-1">資產數 · 記息筆數</div>
+                </div>
+            </div>
+
+            <!-- Year filter + yearly chart summary + per-asset yield -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-5">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <h3 class="font-bold text-slate-800">年度統計</h3>
+                    <select id="passive-year-filter" onchange="renderPassiveIncome()" class="py-1.5 px-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500">
+                        <option value="ALL">全部年份</option>
+                    </select>
+                </div>
+                <div id="yearly-stats" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"></div>
+
+                <div class="pt-2 border-t border-slate-100">
+                    <h4 class="text-sm font-bold text-slate-700 mb-1">各資產年回報（已收息）</h4>
+                    <p class="text-xs text-slate-500 mb-3">僅顯示該年度（或全部）有入帳股息/債息的資產。年回報 = 該期已收息 ÷ 持倉成本（原幣成本換算 HKD）</p>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 text-slate-500 text-xs font-semibold border-b border-slate-200 uppercase tracking-wider">
+                                    <th class="py-2.5 px-3">資產</th>
+                                    <th class="py-2.5 px-3">類型</th>
+                                    <th class="py-2.5 px-3 text-right">持倉成本 (HKD)</th>
+                                    <th class="py-2.5 px-3 text-right">該期已收 (HKD)</th>
+                                    <th class="py-2.5 px-3 text-right">年回報</th>
+                                    <th class="py-2.5 px-3 text-right">入帳次數</th>
+                                </tr>
+                            </thead>
+                            <tbody id="yearly-asset-yield-tbody" class="divide-y divide-slate-100 text-sm"></tbody>
+                        </table>
+                    </div>
+                    <div id="yearly-asset-yield-empty" class="hidden py-6 text-center text-sm text-slate-400">該期間尚無任何股息/債息入帳</div>
+                </div>
+            </div>
+
+            <!-- Income records table -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-5 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800">股息 / 債息入帳明細</h2>
+                        <p class="text-xs text-slate-500 mt-0.5">在持倉列表點「記息」按鈕即可新增每筆實際收到的收入</p>
+                    </div>
+                    <span id="income-record-count" class="bg-slate-100 text-slate-600 text-xs px-2.5 py-1 rounded-full font-medium">0 筆</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-500 text-xs font-semibold border-b border-slate-200 uppercase tracking-wider">
+                                <th class="py-3.5 px-4">日期</th>
+                                <th class="py-3.5 px-4">資產</th>
+                                <th class="py-3.5 px-4">類型</th>
+                                <th class="py-3.5 px-4 text-right">金額 (原幣)</th>
+                                <th class="py-3.5 px-4 text-right">金額 (HKD)</th>
+                                <th class="py-3.5 px-4">備註</th>
+                                <th class="py-3.5 px-4 text-center">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="income-records-tbody" class="divide-y divide-slate-100 text-sm"></tbody>
+                    </table>
+                </div>
+                <div id="income-empty" class="hidden py-10 text-center text-slate-400">
+                    <p>尚無入帳紀錄。請到「持倉明細」點各資產旁的 <strong>記息</strong> 按鈕新增。</p>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ========== PROPERTY (REAL ESTATE) VIEW ========== -->
+        <div id="view-property" class="hidden space-y-6">
+            <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm text-amber-900 flex items-start space-x-2">
+                <i data-lucide="info" class="w-5 h-5 shrink-0 mt-0.5"></i>
+                <div>
+                    <strong>獨立計算</strong>：不動產資料<strong>不會</strong>計入上方「持倉明細」的流動資產總市值與盈虧。此頁專門追蹤物業淨租金、成本與收益率。
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex items-center justify-between text-slate-500 text-sm font-medium mb-1">
+                        <span>物業總市值 (HKD)</span>
+                        <i data-lucide="building-2" class="w-5 h-5 text-amber-600"></i>
+                    </div>
+                    <div id="prop-total-value" class="text-2xl font-bold text-slate-900">$0.00</div>
+                    <div id="prop-total-cost" class="text-xs text-slate-400 mt-1">總買入成本: $0</div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex items-center justify-between text-slate-500 text-sm font-medium mb-1">
+                        <span>年化淨租金收入 (HKD)</span>
+                        <i data-lucide="banknote" class="w-5 h-5 text-emerald-600"></i>
+                    </div>
+                    <div id="prop-net-rent" class="text-2xl font-bold text-emerald-600">$0.00</div>
+                    <div class="text-xs text-slate-400 mt-1">租金 − 管理費 − 差餉 − 其他</div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex items-center justify-between text-slate-500 text-sm font-medium mb-1">
+                        <span>淨租金收益率</span>
+                        <i data-lucide="percent" class="w-5 h-5 text-blue-600"></i>
+                    </div>
+                    <div id="prop-yield" class="text-2xl font-bold text-slate-900">0.00%</div>
+                    <div class="text-xs text-slate-400 mt-1">淨租金 ÷ 買入成本</div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex items-center justify-between text-slate-500 text-sm font-medium mb-1">
+                        <span>未實現資本利得</span>
+                        <i data-lucide="trending-up" class="w-5 h-5 text-purple-600"></i>
+                    </div>
+                    <div id="prop-capital-gain" class="text-2xl font-bold text-slate-900">$0.00</div>
+                    <div class="text-xs text-slate-400 mt-1">市值 − 買入成本</div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <h2 class="text-lg font-bold text-slate-800">不動產列表</h2>
+                        <span id="prop-badge-count" class="bg-slate-100 text-slate-600 text-xs px-2.5 py-1 rounded-full font-medium">0 筆</span>
+                    </div>
+                    <button onclick="openPropertyModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-sm transition flex items-center space-x-1.5">
+                        <i data-lucide="plus" class="w-4 h-4"></i><span>新增物業</span>
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-500 text-xs font-semibold border-b border-slate-200 uppercase tracking-wider">
+                                <th class="py-3.5 px-4">物業名稱</th>
+                                <th class="py-3.5 px-4 text-right">買入價</th>
+                                <th class="py-3.5 px-4 text-right">現市值</th>
+                                <th class="py-3.5 px-4 text-right">年租金</th>
+                                <th class="py-3.5 px-4 text-right">管理費</th>
+                                <th class="py-3.5 px-4 text-right">差餉/地租</th>
+                                <th class="py-3.5 px-4 text-right">其他支出</th>
+                                <th class="py-3.5 px-4 text-right">年淨收入</th>
+                                <th class="py-3.5 px-4 text-right">淨收益率</th>
+                                <th class="py-3.5 px-4 text-center">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="property-tbody" class="divide-y divide-slate-100 text-sm"></tbody>
+                    </table>
+                </div>
+                <div id="property-empty" class="hidden py-12 text-center text-slate-400">
+                    <i data-lucide="home" class="w-12 h-12 mx-auto mb-3 opacity-40"></i>
+                    <p class="text-base font-medium">尚未新增任何物業</p>
+                    <p class="text-xs mt-1">點「新增物業」開始記錄不動產資料</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== INSURANCE VIEW ========== -->
+        <div id="view-insurance" class="hidden space-y-6">
+            <div class="bg-sky-50 border border-sky-200 rounded-2xl p-4 text-sm text-sky-900 flex items-start space-x-2">
+                <i data-lucide="info" class="w-5 h-5 shrink-0 mt-0.5"></i>
+                <div>
+                    <strong>獨立計算</strong>：保單資料<strong>不會</strong>計入持倉明細的流動資產總市值與盈虧。此頁專門追蹤保額、年繳保費與現金價值。
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex items-center justify-between text-slate-500 text-sm font-medium mb-1">
+                        <span>保單總數</span>
+                        <i data-lucide="shield" class="w-5 h-5 text-sky-600"></i>
+                    </div>
+                    <div id="ins-total-count" class="text-2xl font-bold text-slate-900">0</div>
+                    <div class="text-xs text-slate-400 mt-1">生效中：<span id="ins-active-count">0</span></div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex items-center justify-between text-slate-500 text-sm font-medium mb-1">
+                        <span>總保額 (HKD)</span>
+                        <i data-lucide="umbrella" class="w-5 h-5 text-emerald-600"></i>
+                    </div>
+                    <div id="ins-total-cover" class="text-2xl font-bold text-emerald-600">$0.00</div>
+                    <div class="text-xs text-slate-400 mt-1">保障額合計</div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex items-center justify-between text-slate-500 text-sm font-medium mb-1">
+                        <span>年繳保費合計 (HKD)</span>
+                        <i data-lucide="banknote" class="w-5 h-5 text-amber-600"></i>
+                    </div>
+                    <div id="ins-total-premium" class="text-2xl font-bold text-slate-900">$0.00</div>
+                    <div class="text-xs text-slate-400 mt-1">每年保費支出</div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex items-center justify-between text-slate-500 text-sm font-medium mb-1">
+                        <span>現金價值合計 (HKD)</span>
+                        <i data-lucide="wallet" class="w-5 h-5 text-indigo-600"></i>
+                    </div>
+                    <div id="ins-total-cash" class="text-2xl font-bold text-indigo-600">$0.00</div>
+                    <div class="text-xs text-slate-400 mt-1">儲蓄／投連現值</div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <h2 class="text-lg font-bold text-slate-800">保單列表</h2>
+                        <span id="ins-badge-count" class="bg-slate-100 text-slate-600 text-xs px-2.5 py-1 rounded-full font-medium">0 筆</span>
+                    </div>
+                    <button onclick="openInsuranceModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-sm transition flex items-center space-x-1.5">
+                        <i data-lucide="plus" class="w-4 h-4"></i><span>新增保單</span>
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-500 text-xs font-semibold border-b border-slate-200 uppercase tracking-wider">
+                                <th class="py-3.5 px-4">保單 / 產品</th>
+                                <th class="py-3.5 px-4">類型</th>
+                                <th class="py-3.5 px-4">受保人</th>
+                                <th class="py-3.5 px-4 text-right">保額</th>
+                                <th class="py-3.5 px-4 text-right">年繳保費</th>
+                                <th class="py-3.5 px-4 text-right">現金價值</th>
+                                <th class="py-3.5 px-4">生效 / 到期</th>
+                                <th class="py-3.5 px-4">狀態</th>
+                                <th class="py-3.5 px-4 text-center">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="insurance-tbody" class="divide-y divide-slate-100 text-sm"></tbody>
+                    </table>
+                </div>
+                <div id="insurance-empty" class="hidden py-12 text-center text-slate-400">
+                    <i data-lucide="shield" class="w-12 h-12 mx-auto mb-3 opacity-40"></i>
+                    <p class="text-base font-medium">尚未新增任何保單</p>
+                    <p class="text-xs mt-1">點「新增保單」開始記錄保險資料</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ========== Exchange Rate Modal ========== -->
+    <div id="rate-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+                <h3 class="font-bold text-lg flex items-center space-x-2"><i data-lucide="refresh-cw" class="w-5 h-5"></i><span>匯率設定</span></h3>
+                <button onclick="closeRateModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <p class="text-sm text-slate-600">預設會自動從網路更新 <strong>USD→HKD</strong>、<strong>CNY→HKD</strong>。你也可以手動覆寫；手動值會保存在本機，直到你按「恢復自動」。</p>
+                <div class="grid grid-cols-1 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">1 USD = ? HKD</label>
+                        <input type="number" step="0.0001" id="manual-usd-rate" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">1 CNY = ? HKD（人民幣）</label>
+                        <input type="number" step="0.0001" id="manual-cny-rate" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                </div>
+                <p id="rate-mode-hint" class="text-xs text-slate-500">目前：自動更新</p>
+                <div class="flex flex-col space-y-2 pt-1">
+                    <button onclick="applyManualRates()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl transition">套用手動匯率</button>
+                    <button onclick="resetAutoRates()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold rounded-xl transition">恢復自動並立即更新</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== Email Modal ========== -->
+    <div id="email-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+                <h3 class="font-bold text-lg flex items-center space-x-2"><i data-lucide="cloud" class="w-5 h-5"></i><span>Email 綁定 · 雲端同步</span></h3>
+                <button onclick="closeEmailModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <p class="text-sm text-slate-600">輸入 Email 作為資料 ID，持倉、股息紀錄與不動產會一併同步至 Supabase。</p>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Email 地址</label>
+                    <input type="email" id="email-input" placeholder="your@email.com" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+                <div class="flex flex-col space-y-2">
+                    <button onclick="bindEmailAndLoad()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl transition flex items-center justify-center space-x-2">
+                        <i data-lucide="download-cloud" class="w-4 h-4"></i><span>綁定並從雲端載入</span>
+                    </button>
+                    <button onclick="saveToCloud()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold rounded-xl transition flex items-center justify-center space-x-2">
+                        <i data-lucide="upload-cloud" class="w-4 h-4"></i><span>儲存目前資料到雲端</span>
+                    </button>
+                    <button onclick="unbindEmail()" class="w-full py-2 text-sm text-slate-500 hover:text-rose-600 transition">解除綁定</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== Holding Modal ========== -->
+    <div id="holding-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden max-h-[90vh] overflow-y-auto">
+            <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between sticky top-0">
+                <h3 id="modal-title" class="font-bold text-lg">新增持倉紀錄</h3>
+                <button onclick="closeAddModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="holding-form" onsubmit="handleFormSubmit(event)" class="p-6 space-y-4">
+                <input type="hidden" id="holding-id">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">資產類型</label>
+                        <select id="asset-type" onchange="onAssetTypeChange()" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                            <option value="HK">港股 (HK)</option>
+                            <option value="US">美股 (US)</option>
+                            <option value="OTHER">債券 / 基金 / 其他</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">計價貨幣</label>
+                        <select id="currency" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                            <option value="HKD">HKD</option>
+                            <option value="USD">USD</option>
+                            <option value="CNY">CNY</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">資產代號</label>
+                        <div class="flex space-x-1.5">
+                            <input type="text" id="ticker" required placeholder="0700.HK / AAPL" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm uppercase focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                            <button type="button" id="ai-autofill-btn" onclick="autoFillByTicker()" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-3 py-2 rounded-xl text-xs font-semibold border border-emerald-300 transition">自動</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">資產名稱</label>
+                        <input type="text" id="name" required placeholder="騰訊控股" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                </div>
+                <div id="mature-date-container" class="hidden">
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">到期日</label>
+                    <input type="date" id="mature-date" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">持有數量</label>
+                        <input type="number" step="any" id="quantity" required class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">平均買入成本</label>
+                        <input type="number" step="any" id="buy-price" required class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">目前現價 (選填)</label>
+                    <input type="number" step="any" id="current-price" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+                <div class="pt-4 flex justify-end space-x-3 border-t border-slate-100">
+                    <button type="button" onclick="closeAddModal()" class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-xl">取消</button>
+                    <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl">儲存持倉</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========== Income Record Modal (記息) ========== -->
+    <div id="income-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div class="px-6 py-4 bg-emerald-700 text-white flex items-center justify-between">
+                <h3 class="font-bold text-lg flex items-center space-x-2"><i data-lucide="banknote" class="w-5 h-5"></i><span>記錄股息 / 債息</span></h3>
+                <button onclick="closeIncomeModal()" class="text-emerald-100 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="income-form" onsubmit="handleIncomeSubmit(event)" class="p-6 space-y-4">
+                <input type="hidden" id="income-holding-id">
+                <div class="bg-slate-50 rounded-xl p-3 text-sm">
+                    <div class="font-semibold text-slate-800" id="income-holding-name">—</div>
+                    <div class="text-xs text-slate-500" id="income-holding-ticker">—</div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">入帳日期 <span class="text-rose-500">*</span></label>
+                    <input type="date" id="income-date" required class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">收到金額 (原幣) <span class="text-rose-500">*</span></label>
+                    <input type="number" step="any" id="income-amount" required placeholder="0.00" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">備註 (選填)</label>
+                    <input type="text" id="income-note" placeholder="例如：2025 中期息 / Q3 派息" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+                <div class="pt-2 flex justify-end space-x-3">
+                    <button type="button" onclick="closeIncomeModal()" class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-xl">取消</button>
+                    <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl">確認入帳</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========== Property Modal ========== -->
+    <div id="property-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden max-h-[90vh] overflow-y-auto">
+            <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between sticky top-0">
+                <h3 id="property-modal-title" class="font-bold text-lg">新增物業</h3>
+                <button onclick="closePropertyModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="property-form" onsubmit="handlePropertySubmit(event)" class="p-6 space-y-4">
+                <input type="hidden" id="property-id">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">物業名稱 / 地址 <span class="text-rose-500">*</span></label>
+                    <input type="text" id="prop-name" required placeholder="例如：沙田某座單位" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">計價貨幣</label>
+                        <select id="prop-currency" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                            <option value="HKD">HKD</option>
+                            <option value="USD">USD</option>
+                            <option value="CNY">CNY</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">買入日期 (選填)</label>
+                        <input type="date" id="prop-buy-date" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">買入價 <span class="text-rose-500">*</span></label>
+                        <input type="number" step="any" id="prop-buy-price" required class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">現市值 <span class="text-rose-500">*</span></label>
+                        <input type="number" step="any" id="prop-current-value" required class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">每年租金收入 <span class="text-rose-500">*</span></label>
+                    <input type="number" step="any" id="prop-annual-rent" required placeholder="年租金總額" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">年管理費</label>
+                        <input type="number" step="any" id="prop-mgmt-fee" placeholder="0" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">年差餉/地租</label>
+                        <input type="number" step="any" id="prop-rates" placeholder="0" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">其他年支出</label>
+                        <input type="number" step="any" id="prop-other-exp" placeholder="0" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">備註</label>
+                    <input type="text" id="prop-note" placeholder="例如：業主自用 / 出租中" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+                <div class="pt-4 flex justify-end space-x-3 border-t border-slate-100">
+                    <button type="button" onclick="closePropertyModal()" class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-xl">取消</button>
+                    <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl">儲存物業</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========== Insurance Modal ========== -->
+    <div id="insurance-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden max-h-[90vh] overflow-y-auto">
+            <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between sticky top-0">
+                <h3 id="insurance-modal-title" class="font-bold text-lg">新增保單</h3>
+                <button onclick="closeInsuranceModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="insurance-form" onsubmit="handleInsuranceSubmit(event)" class="p-6 space-y-4">
+                <input type="hidden" id="ins-id">
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="col-span-2">
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">產品名稱 <span class="text-rose-500">*</span></label>
+                        <input type="text" id="ins-name" required placeholder="例如：危疾保 / 終身壽險" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">保險公司</label>
+                        <input type="text" id="ins-insurer" placeholder="例如：友邦 / 保誠" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">保單號碼</label>
+                        <input type="text" id="ins-policy-no" placeholder="選填" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">類型</label>
+                        <select id="ins-type" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                            <option value="life">壽險</option>
+                            <option value="ci">危疾</option>
+                            <option value="medical">醫療</option>
+                            <option value="savings">儲蓄</option>
+                            <option value="ilp">投資相連</option>
+                            <option value="accident">意外</option>
+                            <option value="other">其他</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">狀態</label>
+                        <select id="ins-status" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                            <option value="active">生效中</option>
+                            <option value="paidup">已繳清</option>
+                            <option value="lapsed">失效</option>
+                            <option value="surrendered">已退保</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">受保人</label>
+                        <input type="text" id="ins-insured" placeholder="姓名" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">計價貨幣</label>
+                        <select id="ins-currency" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                            <option value="HKD">HKD</option>
+                            <option value="USD">USD</option>
+                            <option value="CNY">CNY</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">保額 / 保障額</label>
+                        <input type="number" step="any" id="ins-cover" placeholder="0" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">年繳保費</label>
+                        <input type="number" step="any" id="ins-premium" placeholder="折算為年繳總額" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">現金價值（現值）</label>
+                        <input type="number" step="any" id="ins-cash" placeholder="0" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">繳費年期（年）</label>
+                        <input type="number" step="1" id="ins-pay-years" placeholder="例如 10 / 20" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">生效日</label>
+                        <input type="date" id="ins-start" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">到期 / 保障結束日</label>
+                        <input type="date" id="ins-end" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">備註</label>
+                    <input type="text" id="ins-note" placeholder="例如：自動轉帳、受益人等" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+                <div class="pt-4 flex justify-end space-x-3 border-t border-slate-100">
+                    <button type="button" onclick="closeInsuranceModal()" class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-xl">取消</button>
+                    <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl">儲存保單</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- AI Modal -->
+    <div id="ai-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <i data-lucide="sparkles" class="w-5 h-5 text-amber-300"></i>
+                    <h3 class="font-bold text-lg">智慧投資分析顧問</h3>
+                </div>
+                <button onclick="closeAiAdvisor()" class="text-emerald-100 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto space-y-4 flex-1 bg-slate-50" id="ai-chat-content">
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-2">
+                    <div class="flex items-center space-x-2 text-emerald-600 font-semibold text-sm">
+                        <i data-lucide="bot" class="w-4 h-4"></i><span>AI 顧問已準備就緒</span>
+                    </div>
+                    <p class="text-sm text-slate-600">可協助分析持倉風險、被動收入與不動產配置。目前會輸出持倉摘要供您複製到其他 AI 使用。</p>
+                </div>
+                <div id="ai-response-box" class="hidden bg-white p-4 rounded-2xl shadow-sm border border-slate-200 text-sm text-slate-700 leading-relaxed"></div>
+            </div>
+            <div class="p-4 bg-white border-t border-slate-200 flex items-center space-x-2">
+                <input type="text" id="ai-custom-prompt" placeholder="詢問關於投資組合..." class="flex-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                <button onclick="submitAiPrompt()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center space-x-1.5">
+                    <i data-lucide="send" class="w-4 h-4"></i><span>發送</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 space-y-2"></div>
+
+    <script type="module">
+        // Stock SDK：失敗時降級為手動填價，不讓整站癱瘓
+        let StockSDK = null;
+        let stockSdkInstance = null;
+        try {
+            const mod = await import('https://esm.sh/stock-sdk');
+            StockSDK = mod.StockSDK;
+            stockSdkInstance = new StockSDK();
+        } catch (e) {
+            console.warn('stock-sdk 載入失敗，將僅支援手動填價', e);
+        }
+
+        const SUPABASE_URL = 'https://wanknivxcsrasdkkxmfr.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndhbmtuaXZ4Y3NyYXNka2t4bWZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODczMzE4NjcsImV4cCI6MjEwMjkwNzg2N30.tqsFimERtYCxoh8J-8FlqxByWtX2gNnyaGo08jditrs';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        lucide.createIcons();
+
+        // ========== Utils ==========
+        function escapeHtml(str) {
+            if (str == null) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+        function localDateStr(d = new Date()) {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        }
+        function isValidPositiveNumber(n) {
+            return typeof n === 'number' && isFinite(n) && n > 0;
+        }
+        function isValidNonNegNumber(n) {
+            return typeof n === 'number' && isFinite(n) && n >= 0;
+        }
+        function fmtMoney(n, digits = 2) {
+            return (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+        }
+
+        // ========== State ==========
+        // 預設空陣列，避免新用戶誤以為示例是自己的持倉
+        let holdings = JSON.parse(localStorage.getItem('wealthpulse_holdings') || 'null') || [];
+        let incomeRecords = JSON.parse(localStorage.getItem('wealthpulse_income') || 'null') || [];
+        let properties = JSON.parse(localStorage.getItem('wealthpulse_properties') || 'null') || [];
+        let policies = JSON.parse(localStorage.getItem('wealthpulse_policies') || 'null') || [];
+        let currentEmail = localStorage.getItem('portfolio_email') || '';
+        let exchangeRates = { USD: 7.82, CNY: 1.08, HKD: 1.0 };
+        // 手動覆寫：localStorage 有值則優先使用，不再被 API 蓋掉
+        let rateManual = JSON.parse(localStorage.getItem('portfolio_rate_manual') || 'null');
+        if (rateManual && rateManual.USD) exchangeRates.USD = rateManual.USD;
+        if (rateManual && rateManual.CNY) exchangeRates.CNY = rateManual.CNY;
+        let currentTab = 'holdings';
+        let syncStatus = 'idle'; // idle | syncing | ok | error
+
+        // v1 → v5 資料遷移：把舊 dividend 轉成 incomeRecords
+        (function migrateV1Data() {
+            if (localStorage.getItem('wealthpulse_migrated_v5')) return;
+            let migrated = 0;
+            holdings.forEach(h => {
+                if (h.dividend && Number(h.dividend) > 0) {
+                    const already = incomeRecords.some(r => r.holdingId === h.id && r.note === '從舊版 dividend 遷移');
+                    if (!already) {
+                        incomeRecords.push({
+                            id: 'mig_' + h.id + '_' + Date.now(),
+                            holdingId: h.id,
+                            ticker: h.ticker,
+                            name: h.name,
+                            type: h.type,
+                            currency: h.currency,
+                            date: localDateStr(),
+                            amount: Number(h.dividend),
+                            note: '從舊版 dividend 遷移'
+                        });
+                        migrated++;
+                    }
+                    delete h.dividend;
+                }
+                if (h.expectedAnnual != null) delete h.expectedAnnual;
+            });
+            if (migrated > 0) {
+                localStorage.setItem('wealthpulse_holdings', JSON.stringify(holdings));
+                localStorage.setItem('wealthpulse_income', JSON.stringify(incomeRecords));
+            }
+            localStorage.setItem('wealthpulse_migrated_v5', '1');
+        })();
+
+        // ========== Persistence ==========
+        function saveAllLocal() {
+            localStorage.setItem('wealthpulse_holdings', JSON.stringify(holdings));
+            localStorage.setItem('wealthpulse_income', JSON.stringify(incomeRecords));
+            localStorage.setItem('wealthpulse_properties', JSON.stringify(properties));
+            localStorage.setItem('wealthpulse_policies', JSON.stringify(policies));
+        }
+        function saveAll() {
+            saveAllLocal();
+            autoSaveToCloud();
+        }
+
+        // ========== Tabs ==========
+        function switchTab(tab) {
+            currentTab = tab;
+            document.getElementById('view-holdings').classList.toggle('hidden', tab !== 'holdings');
+            document.getElementById('view-passive').classList.toggle('hidden', tab !== 'passive');
+            document.getElementById('view-property').classList.toggle('hidden', tab !== 'property');
+            document.getElementById('view-insurance').classList.toggle('hidden', tab !== 'insurance');
+
+            ['holdings', 'passive', 'property', 'insurance'].forEach(t => {
+                const btn = document.getElementById('tab-' + t);
+                const active = t === tab;
+                btn.classList.toggle('tab-active', active);
+                btn.classList.toggle('border-emerald-500', active);
+                btn.classList.toggle('text-emerald-600', active);
+                btn.classList.toggle('font-semibold', active);
+                btn.classList.toggle('text-slate-500', !active);
+            });
+
+            const addBtn = document.getElementById('header-add-btn');
+            if (addBtn) {
+                const tip = tab === 'property' ? '新增物業' : tab === 'insurance' ? '新增保單' : '新增持倉';
+                addBtn.title = tip;
+                addBtn.setAttribute('aria-label', tip);
+            }
+
+            if (tab === 'passive') renderPassiveIncome();
+            if (tab === 'property') renderProperties();
+            if (tab === 'insurance') renderInsurance();
+            lucide.createIcons();
+        }
+
+        function headerAddAction() {
+            if (currentTab === 'property') openPropertyModal();
+            else if (currentTab === 'insurance') openInsuranceModal();
+            else openAddModal();
+        }
+
+        // ========== Cloud ==========
+        function updateEmailStatus() {
+            const el = document.getElementById('email-status');
+            el.innerText = currentEmail || '未綁定 Email';
+        }
+        function openEmailModal() {
+            document.getElementById('email-input').value = currentEmail;
+            document.getElementById('email-modal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+        function closeEmailModal() { document.getElementById('email-modal').classList.add('hidden'); }
+        function getCloudId(email) {
+            return 'jlaw_portfolio_' + email.toLowerCase().trim().replace(/[^a-z0-9@._-]/g, '_');
+        }
+        function setSyncStatus(status) {
+            syncStatus = status;
+            const el = document.getElementById('sync-status-dot');
+            if (!el) return;
+            el.className = 'inline-block w-2 h-2 rounded-full ' + (
+                status === 'syncing' ? 'bg-amber-400 animate-pulse' :
+                status === 'ok' ? 'bg-emerald-400' :
+                status === 'error' ? 'bg-rose-500' : 'bg-slate-500'
+            );
+            el.title = status === 'syncing' ? '同步中…' : status === 'ok' ? '已同步' : status === 'error' ? '同步失敗' : '未同步';
+        }
+
+        async function bindEmailAndLoad(emailOverride) {
+            // 修復：onload 時彈窗未開，改用 currentEmail 或傳入值，不要只讀空 input
+            const inputVal = document.getElementById('email-input')?.value?.trim()?.toLowerCase() || '';
+            const email = (emailOverride || inputVal || currentEmail || '').trim().toLowerCase();
+            if (!email || !email.includes('@')) {
+                if (!emailOverride) showToast('請輸入有效 Email', 'info');
+                return;
+            }
+            currentEmail = email;
+            localStorage.setItem('portfolio_email', currentEmail);
+            updateEmailStatus();
+            setSyncStatus('syncing');
+            try {
+                const { data, error } = await supabase.from('notepad_data').select('data').eq('id', getCloudId(currentEmail)).maybeSingle();
+                if (error) throw error;
+                if (data && data.data) {
+                    if (Array.isArray(data.data.holdings)) holdings = data.data.holdings;
+                    if (Array.isArray(data.data.incomeRecords)) incomeRecords = data.data.incomeRecords;
+                    if (Array.isArray(data.data.properties)) properties = data.data.properties;
+                    if (Array.isArray(data.data.policies)) policies = data.data.policies;
+                    // 載入後再跑一次遷移（雲端可能是舊結構）
+                    holdings.forEach(h => {
+                        if (h.dividend && Number(h.dividend) > 0) {
+                            const already = incomeRecords.some(r => r.holdingId === h.id && r.note === '從舊版 dividend 遷移');
+                            if (!already) {
+                                incomeRecords.push({
+                                    id: 'mig_' + h.id + '_' + Date.now(),
+                                    holdingId: h.id, ticker: h.ticker, name: h.name, type: h.type, currency: h.currency,
+                                    date: localDateStr(), amount: Number(h.dividend), note: '從舊版 dividend 遷移'
+                                });
+                            }
+                            delete h.dividend;
+                        }
+                        if (h.expectedAnnual != null) delete h.expectedAnnual;
+                    });
+                    saveAllLocal();
+                    renderTable();
+                    renderPassiveIncome();
+                    renderProperties();
+                    renderInsurance();
+                    setSyncStatus('ok');
+                    showToast(`已從雲端載入資料`, 'success');
+                } else {
+                    setSyncStatus('ok');
+                    showToast('雲端尚無資料，可點「儲存到雲端」上傳', 'info');
+                }
+                closeEmailModal();
+            } catch (err) {
+                setSyncStatus('error');
+                showToast('載入失敗：' + (err.message || err), 'info');
+            }
+        }
+        async function saveToCloud() {
+            if (!currentEmail) {
+                const email = document.getElementById('email-input').value.trim().toLowerCase();
+                if (!email || !email.includes('@')) { showToast('請先輸入 Email', 'info'); return; }
+                currentEmail = email;
+                localStorage.setItem('portfolio_email', currentEmail);
+                updateEmailStatus();
+            }
+            try {
+                const payload = {
+                    id: getCloudId(currentEmail),
+                    data: {
+                        holdings, incomeRecords, properties, policies,
+                        email: currentEmail,
+                        updatedAt: new Date().toISOString(),
+                        app: 'jlaw_portfolio'
+                    },
+                    updated_at: new Date().toISOString()
+                };
+                const { error } = await supabase.from('notepad_data').upsert(payload, { onConflict: 'id' });
+                if (error) throw error;
+                showToast('已成功同步到雲端', 'success');
+                closeEmailModal();
+            } catch (err) {
+                showToast('儲存失敗：' + (err.message || err), 'info');
+            }
+        }
+        function unbindEmail() {
+            currentEmail = '';
+            localStorage.removeItem('portfolio_email');
+            updateEmailStatus();
+            showToast('已解除綁定', 'info');
+            closeEmailModal();
+        }
+        async function autoSaveToCloud() {
+            if (!currentEmail) return;
+            setSyncStatus('syncing');
+            try {
+                const { error } = await supabase.from('notepad_data').upsert({
+                    id: getCloudId(currentEmail),
+                    data: { holdings, incomeRecords, properties, policies, email: currentEmail, updatedAt: new Date().toISOString(), app: 'jlaw_portfolio', version: 5 },
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'id' });
+                if (error) throw error;
+                setSyncStatus('ok');
+            } catch (e) {
+                console.warn(e);
+                setSyncStatus('error');
+            }
+        }
+
+        // ========== Exchange ==========
+        function updateRateBadge() {
+            const usdEl = document.getElementById('usd-hkd-rate');
+            const cnyEl = document.getElementById('cny-hkd-rate');
+            const dot = document.getElementById('rate-status-dot');
+            const hint = document.getElementById('rate-mode-hint');
+            if (usdEl) usdEl.innerText = exchangeRates.USD.toFixed(4);
+            if (cnyEl) cnyEl.innerText = exchangeRates.CNY.toFixed(4);
+            if (rateManual) {
+                if (dot) { dot.className = 'inline-block w-2 h-2 rounded-full bg-amber-400'; }
+                if (hint) hint.innerText = '目前：手動覆寫（不會被自動更新蓋掉）';
+            } else {
+                if (dot) { dot.className = 'inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse'; }
+                if (hint) hint.innerText = '目前：自動更新';
+            }
+        }
+        function openRateModal() {
+            document.getElementById('manual-usd-rate').value = exchangeRates.USD.toFixed(4);
+            document.getElementById('manual-cny-rate').value = exchangeRates.CNY.toFixed(4);
+            updateRateBadge();
+            document.getElementById('rate-modal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+        function closeRateModal() { document.getElementById('rate-modal').classList.add('hidden'); }
+        function applyManualRates() {
+            const usd = parseFloat(document.getElementById('manual-usd-rate').value);
+            const cny = parseFloat(document.getElementById('manual-cny-rate').value);
+            if (!isValidPositiveNumber(usd) || !isValidPositiveNumber(cny)) {
+                showToast('請輸入有效的正數匯率', 'info'); return;
+            }
+            exchangeRates.USD = usd;
+            exchangeRates.CNY = cny;
+            rateManual = { USD: usd, CNY: cny };
+            localStorage.setItem('portfolio_rate_manual', JSON.stringify(rateManual));
+            updateRateBadge();
+            renderTable();
+            renderPassiveIncome();
+            renderProperties();
+            renderInsurance();
+            closeRateModal();
+            showToast('已套用手動匯率', 'success');
+        }
+        async function resetAutoRates() {
+            rateManual = null;
+            localStorage.removeItem('portfolio_rate_manual');
+            closeRateModal();
+            showToast('正在抓取最新匯率…', 'info');
+            await fetchExchangeRates(true);
+        }
+        async function fetchExchangeRates(force = false) {
+            // 手動模式且非強制時，只更新顯示、不覆蓋
+            if (rateManual && !force) {
+                updateRateBadge();
+                return;
+            }
+            try {
+                const res = await fetch('https://open.er-api.com/v6/latest/USD');
+                const data = await res.json();
+                if (data?.rates?.HKD) {
+                    exchangeRates.USD = data.rates.HKD;
+                    if (data.rates.CNY) {
+                        exchangeRates.CNY = data.rates.HKD / data.rates.CNY;
+                    }
+                    updateRateBadge();
+                    renderTable();
+                    renderPassiveIncome();
+                    renderProperties();
+                    renderInsurance();
+                }
+            } catch (e) {
+                updateRateBadge();
+                const usdEl = document.getElementById('usd-hkd-rate');
+                if (usdEl && !rateManual) usdEl.innerText = exchangeRates.USD.toFixed(2) + ' (預設)';
+            }
+        }
+        function convertToHKD(amount, currency) {
+            if (currency === 'USD') return amount * exchangeRates.USD;
+            if (currency === 'CNY') return amount * exchangeRates.CNY;
+            return amount;
+        }
+
+        // ========== Init ==========
+        window.onload = function() {
+            updateEmailStatus();
+            fetchExchangeRates();
+            renderTable();
+            // 修復：用 currentEmail 直接載入，不依賴未開啟的 input
+            if (currentEmail) bindEmailAndLoad(currentEmail);
+            // ESC / 點遮罩關閉所有 modal
+            document.querySelectorAll('[id$="-modal"]').forEach(modal => {
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) modal.classList.add('hidden');
+                });
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    document.querySelectorAll('[id$="-modal"]').forEach(m => m.classList.add('hidden'));
+                }
+            });
+            // 註冊 PWA Service Worker
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('./sw.js').catch((err) => console.warn('SW register failed', err));
+            }
+        };
+
+        // ========== Toast ==========
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `px-4 py-3 rounded-2xl shadow-lg text-sm font-medium text-white transition transform translate-y-2 opacity-0 flex items-center space-x-2 ${type === 'success' ? 'bg-emerald-600' : 'bg-slate-800'}`;
+            toast.innerHTML = `<i data-lucide="${type === 'success' ? 'check-circle-2' : 'info'}" class="w-4 h-4"></i><span>${message}</span>`;
+            container.appendChild(toast);
+            lucide.createIcons();
+            setTimeout(() => toast.classList.remove('translate-y-2', 'opacity-0'), 10);
+            setTimeout(() => { toast.classList.add('translate-y-2', 'opacity-0'); setTimeout(() => toast.remove(), 300); }, 3000);
+        }
+
+        // ========== Export / Import ==========
+        function exportToJson() {
+            const payload = { version: 5, holdings, incomeRecords, properties, policies, exportedAt: new Date().toISOString() };
+            const a = document.createElement('a');
+            a.href = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(payload, null, 2));
+            a.download = `jlaw_portfolio_${localDateStr()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            showToast('已匯出完整資料（持倉／股息／不動產／保險）', 'success');
+        }
+        function triggerImport() { document.getElementById('import-file-input').click(); }
+        function handleFileImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = e => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (Array.isArray(data)) {
+                        // v1 陣列格式：只覆寫 holdings，並遷移 dividend
+                        holdings = data;
+                        holdings.forEach(h => {
+                            if (h.dividend && Number(h.dividend) > 0) {
+                                incomeRecords.push({
+                                    id: 'mig_' + (h.id || Date.now()) + '_' + Math.random().toString(36).slice(2, 7),
+                                    holdingId: h.id, ticker: h.ticker, name: h.name, type: h.type, currency: h.currency,
+                                    date: localDateStr(), amount: Number(h.dividend), note: '從舊版 dividend 遷移'
+                                });
+                                delete h.dividend;
+                            }
+                            if (h.expectedAnnual != null) delete h.expectedAnnual;
+                        });
+                    } else if (data.holdings) {
+                        holdings = data.holdings || [];
+                        incomeRecords = data.incomeRecords || [];
+                        properties = data.properties || [];
+                        policies = data.policies || [];
+                    } else {
+                        showToast('格式不正確', 'info');
+                        return;
+                    }
+                    saveAll();
+                    renderTable();
+                    renderPassiveIncome();
+                    renderProperties();
+                    renderInsurance();
+                    showToast('匯入成功', 'success');
+                } catch (err) {
+                    showToast('解析失敗', 'info');
+                }
+                event.target.value = '';
+            };
+            reader.readAsText(file);
+        }
+
+        // ========== Holdings CRUD ==========
+        function openAddModal(id = null) {
+            document.getElementById('holding-modal').classList.remove('hidden');
+            if (id) {
+                document.getElementById('modal-title').innerText = '編輯持倉紀錄';
+                const item = holdings.find(h => h.id === id);
+                if (item) {
+                    document.getElementById('holding-id').value = item.id;
+                    document.getElementById('asset-type').value = item.type;
+                    document.getElementById('currency').value = item.currency;
+                    document.getElementById('ticker').value = item.ticker;
+                    document.getElementById('name').value = item.name;
+                    document.getElementById('quantity').value = item.quantity;
+                    document.getElementById('buy-price').value = item.buyPrice;
+                    document.getElementById('current-price').value = item.currentPrice || '';
+                    document.getElementById('mature-date').value = item.matureDate || '';
+                    onAssetTypeChange();
+                }
+            } else {
+                document.getElementById('modal-title').innerText = '新增持倉紀錄';
+                document.getElementById('holding-form').reset();
+                document.getElementById('holding-id').value = '';
+                onAssetTypeChange();
+            }
+            lucide.createIcons();
+        }
+        function closeAddModal() { document.getElementById('holding-modal').classList.add('hidden'); }
+        function onAssetTypeChange() {
+            const type = document.getElementById('asset-type').value;
+            const cur = document.getElementById('currency');
+            const mat = document.getElementById('mature-date-container');
+            const isEdit = !!document.getElementById('holding-id').value;
+            // 僅新增時依類型預設貨幣；編輯時不覆蓋使用者已設的幣別
+            if (!isEdit) {
+                if (type === 'HK') cur.value = 'HKD';
+                else if (type === 'US') cur.value = 'USD';
+            }
+            if (type === 'OTHER') mat.classList.remove('hidden');
+            else mat.classList.add('hidden');
+        }
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            const id = document.getElementById('holding-id').value;
+            const type = document.getElementById('asset-type').value;
+            const currency = document.getElementById('currency').value;
+            const ticker = document.getElementById('ticker').value.trim().toUpperCase();
+            const name = document.getElementById('name').value.trim();
+            const quantity = parseFloat(document.getElementById('quantity').value);
+            const buyPrice = parseFloat(document.getElementById('buy-price').value);
+            const currentPriceInput = document.getElementById('current-price').value;
+            const currentPrice = currentPriceInput ? parseFloat(currentPriceInput) : buyPrice;
+            const matureDate = type === 'OTHER' ? document.getElementById('mature-date').value : '';
+            if (!ticker || !name) { showToast('請填寫代號與名稱', 'info'); return; }
+            if (!isValidPositiveNumber(quantity) || !isValidPositiveNumber(buyPrice)) {
+                showToast('數量與成本必須為大於 0 的有效數字', 'info'); return;
+            }
+            if (currentPriceInput && !isValidNonNegNumber(currentPrice)) {
+                showToast('現價必須為有效數字', 'info'); return;
+            }
+            if (id) {
+                const idx = holdings.findIndex(h => h.id === id);
+                if (idx !== -1) holdings[idx] = { ...holdings[idx], type, currency, ticker, name, quantity, buyPrice, currentPrice, matureDate };
+                showToast('持倉已更新');
+            } else {
+                holdings.push({ id: Date.now().toString(), type, currency, ticker, name, quantity, buyPrice, currentPrice, matureDate });
+                showToast('已新增持倉');
+            }
+            saveAll();
+            closeAddModal();
+            renderTable();
+            renderPassiveIncome();
+        }
+        function deleteHolding(id) {
+            if (!confirm('確定刪除此持倉？相關股息紀錄會保留。')) return;
+            holdings = holdings.filter(h => h.id !== id);
+            saveAll();
+            renderTable();
+            renderPassiveIncome();
+            showToast('已刪除持倉', 'info');
+        }
+
+        // ========== Income Records (記息) ==========
+        function openIncomeModal(holdingId) {
+            const h = holdings.find(x => x.id === holdingId);
+            if (!h) return;
+            document.getElementById('income-holding-id').value = holdingId;
+            document.getElementById('income-holding-name').innerText = h.name;
+            document.getElementById('income-holding-ticker').innerText = `${h.ticker} · ${h.currency}`;
+            document.getElementById('income-date').value = localDateStr();
+            document.getElementById('income-amount').value = '';
+            document.getElementById('income-note').value = '';
+            document.getElementById('income-modal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+        function closeIncomeModal() { document.getElementById('income-modal').classList.add('hidden'); }
+        function handleIncomeSubmit(e) {
+            e.preventDefault();
+            const holdingId = document.getElementById('income-holding-id').value;
+            const h = holdings.find(x => x.id === holdingId);
+            if (!h) return;
+            const date = document.getElementById('income-date').value;
+            const amount = parseFloat(document.getElementById('income-amount').value);
+            const note = document.getElementById('income-note').value.trim();
+            if (!date || !amount || amount <= 0) {
+                showToast('請填寫有效日期與金額', 'info');
+                return;
+            }
+            incomeRecords.push({
+                id: Date.now().toString(),
+                holdingId,
+                ticker: h.ticker,
+                name: h.name,
+                type: h.type,
+                currency: h.currency,
+                date,
+                amount,
+                note
+            });
+            saveAll();
+            closeIncomeModal();
+            renderTable();
+            renderPassiveIncome();
+            showToast(`已記錄 ${h.currency} ${amount.toFixed(2)} 股息/債息`, 'success');
+        }
+        function deleteIncomeRecord(id) {
+            if (!confirm('確定刪除此筆入帳紀錄？')) return;
+            incomeRecords = incomeRecords.filter(r => r.id !== id);
+            saveAll();
+            renderPassiveIncome();
+            showToast('已刪除入帳紀錄', 'info');
+        }
+
+        // ========== Properties ==========
+        function openPropertyModal(id = null) {
+            document.getElementById('property-modal').classList.remove('hidden');
+            if (id) {
+                document.getElementById('property-modal-title').innerText = '編輯物業';
+                const p = properties.find(x => x.id === id);
+                if (p) {
+                    document.getElementById('property-id').value = p.id;
+                    document.getElementById('prop-name').value = p.name;
+                    document.getElementById('prop-currency').value = p.currency || 'HKD';
+                    document.getElementById('prop-buy-date').value = p.buyDate || '';
+                    document.getElementById('prop-buy-price').value = p.buyPrice;
+                    document.getElementById('prop-current-value').value = p.currentValue;
+                    document.getElementById('prop-annual-rent').value = p.annualRent;
+                    document.getElementById('prop-mgmt-fee').value = p.mgmtFee || '';
+                    document.getElementById('prop-rates').value = p.rates || '';
+                    document.getElementById('prop-other-exp').value = p.otherExp || '';
+                    document.getElementById('prop-note').value = p.note || '';
+                }
+            } else {
+                document.getElementById('property-modal-title').innerText = '新增物業';
+                document.getElementById('property-form').reset();
+                document.getElementById('property-id').value = '';
+                document.getElementById('prop-currency').value = 'HKD';
+            }
+            lucide.createIcons();
+        }
+        function closePropertyModal() { document.getElementById('property-modal').classList.add('hidden'); }
+        function handlePropertySubmit(e) {
+            e.preventDefault();
+            const id = document.getElementById('property-id').value;
+            const buyPrice = parseFloat(document.getElementById('prop-buy-price').value);
+            const currentValue = parseFloat(document.getElementById('prop-current-value').value);
+            const annualRent = parseFloat(document.getElementById('prop-annual-rent').value);
+            const mgmtFee = parseFloat(document.getElementById('prop-mgmt-fee').value) || 0;
+            const rates = parseFloat(document.getElementById('prop-rates').value) || 0;
+            const otherExp = parseFloat(document.getElementById('prop-other-exp').value) || 0;
+            if (!isValidPositiveNumber(buyPrice) || !isValidPositiveNumber(currentValue)) {
+                showToast('買入價與市值必須為大於 0 的有效數字', 'info'); return;
+            }
+            if (!isValidNonNegNumber(annualRent) || !isValidNonNegNumber(mgmtFee) || !isValidNonNegNumber(rates) || !isValidNonNegNumber(otherExp)) {
+                showToast('租金與支出不可為負數', 'info'); return;
+            }
+            const obj = {
+                id: id || Date.now().toString(),
+                name: document.getElementById('prop-name').value.trim(),
+                currency: document.getElementById('prop-currency').value,
+                buyDate: document.getElementById('prop-buy-date').value || '',
+                buyPrice, currentValue, annualRent, mgmtFee, rates, otherExp,
+                note: document.getElementById('prop-note').value.trim()
+            };
+            if (id) {
+                const idx = properties.findIndex(p => p.id === id);
+                if (idx !== -1) properties[idx] = obj;
+                showToast('物業已更新');
+            } else {
+                properties.push(obj);
+                showToast('已新增物業');
+            }
+            saveAll();
+            closePropertyModal();
+            renderProperties();
+        }
+        function deleteProperty(id) {
+            if (!confirm('確定刪除此物業？')) return;
+            properties = properties.filter(p => p.id !== id);
+            saveAll();
+            renderProperties();
+            showToast('已刪除物業', 'info');
+        }
+
+        // ========== Insurance ==========
+        const INS_TYPE_LABEL = { life: '壽險', ci: '危疾', medical: '醫療', savings: '儲蓄', ilp: '投資相連', accident: '意外', other: '其他' };
+        const INS_STATUS_LABEL = { active: '生效中', paidup: '已繳清', lapsed: '失效', surrendered: '已退保' };
+
+        function openInsuranceModal(id = null) {
+            document.getElementById('insurance-modal').classList.remove('hidden');
+            if (id) {
+                document.getElementById('insurance-modal-title').innerText = '編輯保單';
+                const p = policies.find(x => x.id === id);
+                if (p) {
+                    document.getElementById('ins-id').value = p.id;
+                    document.getElementById('ins-name').value = p.name || '';
+                    document.getElementById('ins-insurer').value = p.insurer || '';
+                    document.getElementById('ins-policy-no').value = p.policyNo || '';
+                    document.getElementById('ins-type').value = p.type || 'life';
+                    document.getElementById('ins-status').value = p.status || 'active';
+                    document.getElementById('ins-insured').value = p.insured || '';
+                    document.getElementById('ins-currency').value = p.currency || 'HKD';
+                    document.getElementById('ins-cover').value = p.cover ?? '';
+                    document.getElementById('ins-premium').value = p.premium ?? '';
+                    document.getElementById('ins-cash').value = p.cashValue ?? '';
+                    document.getElementById('ins-pay-years').value = p.payYears ?? '';
+                    document.getElementById('ins-start').value = p.startDate || '';
+                    document.getElementById('ins-end').value = p.endDate || '';
+                    document.getElementById('ins-note').value = p.note || '';
+                }
+            } else {
+                document.getElementById('insurance-modal-title').innerText = '新增保單';
+                document.getElementById('insurance-form').reset();
+                document.getElementById('ins-id').value = '';
+                document.getElementById('ins-currency').value = 'HKD';
+                document.getElementById('ins-type').value = 'life';
+                document.getElementById('ins-status').value = 'active';
+            }
+            lucide.createIcons();
+        }
+        function closeInsuranceModal() { document.getElementById('insurance-modal').classList.add('hidden'); }
+        function handleInsuranceSubmit(e) {
+            e.preventDefault();
+            const id = document.getElementById('ins-id').value;
+            const cover = parseFloat(document.getElementById('ins-cover').value) || 0;
+            const premium = parseFloat(document.getElementById('ins-premium').value) || 0;
+            const cashValue = parseFloat(document.getElementById('ins-cash').value) || 0;
+            const payYears = parseFloat(document.getElementById('ins-pay-years').value) || 0;
+            if (!isValidNonNegNumber(cover) || !isValidNonNegNumber(premium) || !isValidNonNegNumber(cashValue) || !isValidNonNegNumber(payYears)) {
+                showToast('保額／保費／現金價值不可為負數', 'info'); return;
+            }
+            const obj = {
+                id: id || Date.now().toString(),
+                name: document.getElementById('ins-name').value.trim(),
+                insurer: document.getElementById('ins-insurer').value.trim(),
+                policyNo: document.getElementById('ins-policy-no').value.trim(),
+                type: document.getElementById('ins-type').value,
+                status: document.getElementById('ins-status').value,
+                insured: document.getElementById('ins-insured').value.trim(),
+                currency: document.getElementById('ins-currency').value,
+                cover, premium, cashValue, payYears,
+                startDate: document.getElementById('ins-start').value || '',
+                endDate: document.getElementById('ins-end').value || '',
+                note: document.getElementById('ins-note').value.trim()
+            };
+            if (id) {
+                const idx = policies.findIndex(p => p.id === id);
+                if (idx !== -1) policies[idx] = obj;
+                showToast('保單已更新');
+            } else {
+                policies.push(obj);
+                showToast('已新增保單');
+            }
+            saveAll();
+            closeInsuranceModal();
+            renderInsurance();
+        }
+        function deleteInsurance(id) {
+            if (!confirm('確定刪除此保單？')) return;
+            policies = policies.filter(p => p.id !== id);
+            saveAll();
+            renderInsurance();
+            showToast('已刪除保單', 'info');
+        }
+        function renderInsurance() {
+            let totalCover = 0, totalPremium = 0, totalCash = 0, activeCount = 0;
+            policies.forEach(p => {
+                totalCover += convertToHKD(p.cover || 0, p.currency);
+                // 僅「生效中」計入年繳保費支出；已繳清/失效不計
+                if (p.status === 'active') {
+                    totalPremium += convertToHKD(p.premium || 0, p.currency);
+                }
+                totalCash += convertToHKD(p.cashValue || 0, p.currency);
+                if (p.status === 'active' || p.status === 'paidup') activeCount++;
+            });
+            document.getElementById('ins-total-count').innerText = policies.length;
+            document.getElementById('ins-active-count').innerText = activeCount;
+            document.getElementById('ins-total-cover').innerText = `$${totalCover.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            document.getElementById('ins-total-premium').innerText = `$${totalPremium.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            document.getElementById('ins-total-cash').innerText = `$${totalCash.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            document.getElementById('ins-badge-count').innerText = `${policies.length} 筆`;
+
+            const tbody = document.getElementById('insurance-tbody');
+            const emptyEl = document.getElementById('insurance-empty');
+            tbody.innerHTML = '';
+            emptyEl.classList.toggle('hidden', policies.length > 0);
+
+            policies.forEach(p => {
+                const statusCls = p.status === 'active' ? 'bg-emerald-100 text-emerald-800' : p.status === 'paidup' ? 'bg-blue-100 text-blue-800' : p.status === 'lapsed' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-600';
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50/80 transition';
+                tr.innerHTML = `
+                    <td class="py-3 px-4">
+                        <div class="font-semibold text-slate-900">${escapeHtml(p.name)}</div>
+                        <div class="text-xs text-slate-500">${escapeHtml(p.insurer || '')}${p.policyNo ? ' · ' + escapeHtml(p.policyNo) : ''}</div>
+                        ${p.note ? `<div class="text-xs text-slate-400">${escapeHtml(p.note)}</div>` : ''}
+                    </td>
+                    <td class="py-3 px-4"><span class="px-2 py-0.5 rounded text-xs font-medium bg-sky-100 text-sky-800">${INS_TYPE_LABEL[p.type] || escapeHtml(p.type)}</span></td>
+                    <td class="py-3 px-4 text-slate-700">${escapeHtml(p.insured || '—')}</td>
+                    <td class="py-3 px-4 text-right font-medium">${escapeHtml(p.currency)} ${fmtMoney(p.cover || 0)}</td>
+                    <td class="py-3 px-4 text-right text-amber-700">${escapeHtml(p.currency)} ${fmtMoney(p.premium || 0)}</td>
+                    <td class="py-3 px-4 text-right text-indigo-600">${escapeHtml(p.currency)} ${fmtMoney(p.cashValue || 0)}</td>
+                    <td class="py-3 px-4 text-xs text-slate-500">
+                        ${p.startDate || '—'}<br>${p.endDate ? '→ ' + p.endDate : ''}
+                    </td>
+                    <td class="py-3 px-4"><span class="px-2 py-0.5 rounded text-xs font-medium ${statusCls}">${INS_STATUS_LABEL[p.status] || p.status}</span></td>
+                    <td class="py-3 px-4 text-center">
+                        <div class="flex items-center justify-center space-x-0.5">
+                            <button onclick="openInsuranceModal('${p.id}')" class="p-1.5 hover:bg-slate-200 rounded-lg text-slate-600" title="編輯"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
+                            <button onclick="deleteInsurance('${p.id}')" class="p-1.5 hover:bg-rose-100 rounded-lg text-rose-600" title="刪除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </div>
+                    </td>`;
+                tbody.appendChild(tr);
+            });
+            lucide.createIcons();
+        }
+
+        // ========== Stock quote ==========
+        async function getStockQuote(ticker, type) {
+            if (!stockSdkInstance) return null;
+            try {
+                let res = null;
+                if (type === 'HK') {
+                    let q = ticker.replace('.HK', '').trim();
+                    if (/^\d+$/.test(q)) q = q.padStart(5, '0');
+                    if (!q.toLowerCase().startsWith('hk')) q = `hk${q}`;
+                    if (stockSdkInstance.quotes?.hk) res = await stockSdkInstance.quotes.hk([q]);
+                    else if (typeof stockSdkInstance.quotes === 'function') res = await stockSdkInstance.quotes([q]);
+                } else if (type === 'US') {
+                    let q = ticker.trim().toUpperCase();
+                    if (stockSdkInstance.quotes?.us) res = await stockSdkInstance.quotes.us([q]);
+                    else if (typeof stockSdkInstance.quotes === 'function') res = await stockSdkInstance.quotes([q]);
+                }
+                let item = null;
+                if (Array.isArray(res) && res.length > 0) item = res[0];
+                else if (res && typeof res === 'object') {
+                    const keys = Object.keys(res);
+                    if (keys.length > 0) item = res[keys[0]];
+                }
+                if (!item) return null;
+                const price = item.price ?? item.current ?? item.currentPrice ?? item.last ?? item.zxjg ?? item.now ?? null;
+                const name = item.name ?? item.stockName ?? item.title ?? ticker;
+                return { name, price: price !== null ? parseFloat(price) : null };
+            } catch (err) { return null; }
+        }
+        async function autoFillByTicker() {
+            const ticker = document.getElementById('ticker').value.trim().toUpperCase();
+            if (!ticker) { showToast('請先輸入代號', 'info'); return; }
+            const btn = document.getElementById('ai-autofill-btn');
+            btn.disabled = true;
+            try {
+                let detectType = document.getElementById('asset-type').value;
+                if (ticker.endsWith('.HK') || /^\d+$/.test(ticker.replace('.HK', ''))) detectType = 'HK';
+                else if (/^[A-Za-z]+$/.test(ticker)) detectType = 'US';
+                if (detectType === 'OTHER') { showToast('債券請手動輸入', 'info'); return; }
+                const q = await getStockQuote(ticker, detectType);
+                if (q) {
+                    if (q.name) document.getElementById('name').value = q.name;
+                    document.getElementById('asset-type').value = detectType;
+                    onAssetTypeChange();
+                    if (q.price) {
+                        document.getElementById('current-price').value = q.price;
+                        if (!document.getElementById('buy-price').value) document.getElementById('buy-price').value = q.price;
+                    }
+                    showToast('已自動填寫', 'success');
+                } else showToast('找不到報價', 'info');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+        async function refreshAllPrices() {
+            if (!holdings.length) { showToast('無持倉', 'info'); return; }
+            const btn = document.getElementById('refresh-prices-btn');
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>';
+            btn.disabled = true;
+            lucide.createIcons();
+            let n = 0;
+            await Promise.all(holdings.map(async h => {
+                if (h.type === 'OTHER') return;
+                const q = await getStockQuote(h.ticker, h.type);
+                if (q?.price != null) { h.currentPrice = q.price; n++; }
+            }));
+            saveAll();
+            renderTable();
+            btn.innerHTML = orig;
+            btn.disabled = false;
+            lucide.createIcons();
+            showToast(n > 0 ? `已更新 ${n} 筆現價` : '無可用更新', n > 0 ? 'success' : 'info');
+        }
+
+        // ========== Render Holdings ==========
+        function renderTable() {
+            const tbody = document.getElementById('holdings-tbody');
+            const emptyState = document.getElementById('empty-state');
+            const searchKeyword = document.getElementById('search-input').value.toLowerCase();
+            const filterType = document.getElementById('filter-type').value;
+            tbody.innerHTML = '';
+
+            const filtered = holdings.filter(h => {
+                const matchesSearch = h.ticker.toLowerCase().includes(searchKeyword) || h.name.toLowerCase().includes(searchKeyword);
+                const matchesType = filterType === 'ALL' || h.type === filterType;
+                return matchesSearch && matchesType;
+            });
+            document.getElementById('holding-badge-count').innerText = `${filtered.length} 筆`;
+            emptyState.classList.toggle('hidden', filtered.length > 0);
+
+            let totalValue = 0, totalCost = 0;
+            const cat = { HK: { value: 0, pnl: 0 }, US: { value: 0, pnl: 0 }, OTHER: { value: 0, pnl: 0 } };
+            holdings.forEach(h => {
+                const cur = h.currentPrice ?? h.buyPrice;
+                const mv = convertToHKD(h.quantity * cur, h.currency);
+                const cost = convertToHKD(h.quantity * h.buyPrice, h.currency);
+                totalValue += mv;
+                totalCost += cost;
+                if (cat[h.type]) { cat[h.type].value += mv; cat[h.type].pnl += (mv - cost); }
+            });
+
+            document.getElementById('total-value').innerText = `$${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            document.getElementById('total-cost').innerText = `總成本: $${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HKD`;
+            const pnl = totalValue - totalCost;
+            const pnlEl = document.getElementById('total-pnl');
+            pnlEl.innerText = `${pnl >= 0 ? '+' : ''}$${pnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HKD`;
+            pnlEl.className = `text-2xl font-bold ${pnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`;
+            const pct = totalCost > 0 ? (pnl / totalCost) * 100 : 0;
+            document.getElementById('total-pnl-percent').innerText = `報酬率: ${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+            document.getElementById('total-pnl-percent').className = `text-xs mt-1 font-semibold ${pct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`;
+            document.getElementById('total-holdings-count').innerText = `共 ${holdings.length} 筆持倉`;
+            document.getElementById('hk-value-summary').innerText = `$${Math.round(cat.HK.value).toLocaleString()}`;
+            document.getElementById('us-value-summary').innerText = `$${Math.round(cat.US.value).toLocaleString()}`;
+            document.getElementById('other-value-summary').innerText = `$${Math.round(cat.OTHER.value).toLocaleString()}`;
+            ['hk', 'us', 'other'].forEach((k, i) => {
+                const key = ['HK', 'US', 'OTHER'][i];
+                const el = document.getElementById(`${k}-pnl-summary`);
+                el.innerText = `${cat[key].pnl >= 0 ? '+' : ''}$${Math.round(cat[key].pnl).toLocaleString()}`;
+                el.className = `font-bold truncate ${cat[key].pnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`;
+            });
+
+            // Passive income summary：TTM（近 12 個月）÷ 12、TTM / 成本
+            const now = new Date();
+            const yStr = String(now.getFullYear());
+            const ttmCutoff = new Date(now);
+            ttmCutoff.setFullYear(ttmCutoff.getFullYear() - 1);
+            const ttmStr = localDateStr(ttmCutoff);
+            let ytdDiv = 0, lifeDiv = 0, ttmDiv = 0;
+            incomeRecords.forEach(r => {
+                const hkd = convertToHKD(r.amount, r.currency);
+                lifeDiv += hkd;
+                if (r.date && r.date.startsWith(yStr)) ytdDiv += hkd;
+                if (r.date && r.date >= ttmStr) ttmDiv += hkd;
+            });
+            const monthlyAvg = ttmDiv / 12;
+            const divYield = totalCost > 0 ? (ttmDiv / totalCost) * 100 : 0;
+            document.getElementById('holdings-monthly-div').innerText = `$${fmtMoney(monthlyAvg)}`;
+            document.getElementById('holdings-ytd-div').innerText = `$${Math.round(ytdDiv).toLocaleString()}`;
+            document.getElementById('holdings-div-yield').innerText = `${divYield.toFixed(2)}%`;
+            document.getElementById('holdings-lifetime-div').innerText = `$${Math.round(lifeDiv).toLocaleString()}`;
+
+            filtered.forEach(h => {
+                const cur = h.currentPrice ?? h.buyPrice;
+                const mvCur = h.quantity * cur;
+                const costCur = h.quantity * h.buyPrice;
+                const pnlCur = mvCur - costCur;
+                const pnlPct = costCur > 0 ? (pnlCur / costCur) * 100 : 0;
+                const mvHKD = convertToHKD(mvCur, h.currency);
+                const receivedForH = incomeRecords.filter(r => r.holdingId === h.id).reduce((s, r) => s + r.amount, 0);
+
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50/80 transition border-b border-slate-100';
+                tr.innerHTML = `
+                    <td class="py-4 px-4">
+                        <div class="font-bold text-slate-900">${escapeHtml(h.ticker)}</div>
+                        <div class="text-xs text-slate-500">${escapeHtml(h.name)}</div>
+                        ${receivedForH > 0 ? `<div class="text-[11px] text-indigo-600 mt-0.5">已收: ${escapeHtml(h.currency)} ${receivedForH.toLocaleString(undefined,{maximumFractionDigits:0})}</div>` : ''}
+                    </td>
+                    <td class="py-4 px-4">
+                        <span class="px-2.5 py-0.5 rounded-lg text-xs font-semibold w-max ${h.type === 'HK' ? 'bg-amber-100 text-amber-800' : h.type === 'US' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}">
+                            ${h.type === 'HK' ? '港股' : h.type === 'US' ? '美股' : '債券/基金'}
+                        </span>
+                        ${h.matureDate ? `<div class="text-xs text-slate-500 mt-1">到期: ${h.matureDate}</div>` : ''}
+                    </td>
+                    <td class="py-4 px-4 text-right font-medium">${h.quantity.toLocaleString()}</td>
+                    <td class="py-4 px-4 text-right text-slate-600">${h.currency} ${h.buyPrice.toFixed(2)}</td>
+                    <td class="py-4 px-4 text-right font-medium">${h.currency} ${cur.toFixed(2)}</td>
+                    <td class="py-4 px-4 text-right font-bold">$${mvHKD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td class="py-4 px-4 text-right">
+                        <div class="font-semibold ${pnlCur >= 0 ? 'text-emerald-600' : 'text-rose-600'}">${pnlCur >= 0 ? '+' : ''}${h.currency} ${pnlCur.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                        <div class="text-xs ${pnlPct >= 0 ? 'text-emerald-500' : 'text-rose-500'}">(${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%)</div>
+                    </td>
+                    <td class="py-4 px-4 text-center">
+                        <div class="flex items-center justify-center space-x-0.5">
+                            <button onclick="openIncomeModal('${h.id}')" class="p-1.5 hover:bg-emerald-100 rounded-lg text-emerald-700 transition" title="記錄股息/債息">
+                                <i data-lucide="banknote" class="w-4 h-4"></i>
+                            </button>
+                            <button onclick="openAddModal('${h.id}')" class="p-1.5 hover:bg-slate-200 rounded-lg text-slate-600 transition" title="編輯">
+                                <i data-lucide="edit-3" class="w-4 h-4"></i>
+                            </button>
+                            <button onclick="deleteHolding('${h.id}')" class="p-1.5 hover:bg-rose-100 rounded-lg text-rose-600 transition" title="刪除">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </td>`;
+                tbody.appendChild(tr);
+            });
+            lucide.createIcons();
+        }
+
+        // ========== Render Passive Income ==========
+        function renderPassiveIncome() {
+            const now = new Date();
+            const thisYear = now.getFullYear();
+            const yStr = String(thisYear);
+            const mStr = yStr + '-' + String(now.getMonth() + 1).padStart(2, '0');
+            let totalReceivedHKD = 0, ytdHKD = 0, mtdHKD = 0;
+            const yearMap = {};
+            const assetSet = new Set();
+
+            incomeRecords.forEach(r => {
+                const hkd = convertToHKD(r.amount, r.currency);
+                totalReceivedHKD += hkd;
+                if (r.holdingId) assetSet.add(r.holdingId);
+                else if (r.ticker) assetSet.add(r.ticker);
+                const y = r.date ? parseInt(r.date.slice(0, 4), 10) : null;
+                if (y) {
+                    yearMap[y] = (yearMap[y] || 0) + hkd;
+                    if (y === thisYear) ytdHKD += hkd;
+                }
+                if (r.date && r.date.startsWith(mStr)) mtdHKD += hkd;
+            });
+
+            document.getElementById('passive-ytd-total').innerText = `$${ytdHKD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            document.getElementById('passive-ytd-label').innerText = `${thisYear} 年實際入帳`;
+            document.getElementById('passive-mtd-total').innerText = `$${mtdHKD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            document.getElementById('passive-mtd-label').innerText = `${mStr} 實際入帳`;
+            document.getElementById('passive-received-total').innerText = `$${totalReceivedHKD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            document.getElementById('passive-asset-count').innerText = assetSet.size;
+            document.getElementById('passive-record-count-card').innerText = incomeRecords.length;
+
+            // Year filter options
+            const yearFilter = document.getElementById('passive-year-filter');
+            const years = Object.keys(yearMap).map(Number).sort((a, b) => b - a);
+            const prev = yearFilter.value;
+            yearFilter.innerHTML = '<option value="ALL">全部年份</option>' + years.map(y => `<option value="${y}">${y} 年</option>`).join('');
+            if (prev && (prev === 'ALL' || years.includes(parseInt(prev)))) yearFilter.value = prev;
+
+            // Yearly stats cards
+            const yearlyEl = document.getElementById('yearly-stats');
+            yearlyEl.innerHTML = years.length === 0
+                ? '<div class="text-sm text-slate-400 col-span-full">尚無年度入帳資料</div>'
+                : years.map(y => `
+                    <div class="bg-slate-50 border border-slate-100 rounded-xl p-3 text-center">
+                        <div class="text-xs text-slate-500 font-medium">${y}</div>
+                        <div class="text-lg font-bold text-emerald-600 mt-0.5">$${Math.round(yearMap[y]).toLocaleString()}</div>
+                    </div>`).join('');
+
+            // Income records table
+            const filterYear = yearFilter.value;
+            let records = [...incomeRecords].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+            if (filterYear !== 'ALL') records = records.filter(r => r.date && r.date.startsWith(filterYear));
+
+            // Per-asset yearly return (for selected year / all)
+            const assetAgg = {};
+            records.forEach(r => {
+                const key = r.holdingId || r.ticker;
+                if (!assetAgg[key]) {
+                    assetAgg[key] = {
+                        holdingId: r.holdingId,
+                        ticker: r.ticker,
+                        name: r.name || r.ticker,
+                        type: r.type || 'OTHER',
+                        currency: r.currency || 'HKD',
+                        receivedHKD: 0,
+                        count: 0
+                    };
+                }
+                assetAgg[key].receivedHKD += convertToHKD(r.amount, r.currency);
+                assetAgg[key].count += 1;
+                if (r.name) assetAgg[key].name = r.name;
+            });
+
+            const yieldBody = document.getElementById('yearly-asset-yield-tbody');
+            const yieldEmpty = document.getElementById('yearly-asset-yield-empty');
+            yieldBody.innerHTML = '';
+            const assetRows = Object.values(assetAgg).sort((a, b) => b.receivedHKD - a.receivedHKD);
+            yieldEmpty.classList.toggle('hidden', assetRows.length > 0);
+
+            assetRows.forEach(row => {
+                const h = holdings.find(x => x.id === row.holdingId) || holdings.find(x => x.ticker === row.ticker);
+                const costHKD = h
+                    ? convertToHKD(h.quantity * h.buyPrice, h.currency)
+                    : 0;
+                const yld = costHKD > 0 ? (row.receivedHKD / costHKD) * 100 : null;
+                const typeLabel = row.type === 'HK' ? '港股' : row.type === 'US' ? '美股' : '債券/其他';
+                const typeCls = row.type === 'HK' ? 'bg-amber-100 text-amber-800' : row.type === 'US' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800';
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50/80 transition';
+                tr.innerHTML = `
+                    <td class="py-2.5 px-3">
+                        <div class="font-semibold text-slate-900">${row.ticker}</div>
+                        <div class="text-xs text-slate-500">${row.name}</div>
+                    </td>
+                    <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded text-xs font-medium ${typeCls}">${typeLabel}</span></td>
+                    <td class="py-2.5 px-3 text-right text-slate-600">${costHKD > 0 ? '$' + costHKD.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '—'}</td>
+                    <td class="py-2.5 px-3 text-right font-semibold text-emerald-600">$${row.receivedHKD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td class="py-2.5 px-3 text-right font-bold ${yld != null ? (yld >= 0 ? 'text-emerald-600' : 'text-rose-600') : 'text-slate-400'}">${yld != null ? yld.toFixed(2) + '%' : '—'}</td>
+                    <td class="py-2.5 px-3 text-right text-slate-500">${row.count}</td>`;
+                yieldBody.appendChild(tr);
+            });
+
+            const tbody = document.getElementById('income-records-tbody');
+            const emptyEl = document.getElementById('income-empty');
+            tbody.innerHTML = '';
+            document.getElementById('income-record-count').innerText = `${records.length} 筆`;
+            emptyEl.classList.toggle('hidden', records.length > 0);
+
+            records.forEach(r => {
+                const hkd = convertToHKD(r.amount, r.currency);
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50/80 transition';
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-medium">${escapeHtml(r.date || '—')}</td>
+                    <td class="py-3 px-4">
+                        <div class="font-semibold">${escapeHtml(r.ticker)}</div>
+                        <div class="text-xs text-slate-500">${escapeHtml(r.name || '')}${!holdings.find(x => x.id === r.holdingId) ? ' <span class="text-amber-600">（持倉已刪）</span>' : ''}</div>
+                    </td>
+                    <td class="py-3 px-4">
+                        <span class="px-2 py-0.5 rounded text-xs font-medium ${r.type === 'HK' ? 'bg-amber-100 text-amber-800' : r.type === 'US' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}">
+                            ${r.type === 'HK' ? '港股' : r.type === 'US' ? '美股' : '債券/其他'}
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 text-right">${r.currency} ${r.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td class="py-3 px-4 text-right font-semibold text-emerald-600">$${hkd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td class="py-3 px-4 text-slate-500 text-xs">${escapeHtml(r.note || '—')}</td>
+                    <td class="py-3 px-4 text-center">
+                        <button onclick="deleteIncomeRecord('${r.id}')" class="p-1.5 hover:bg-rose-100 rounded-lg text-rose-600" title="刪除">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </td>`;
+                tbody.appendChild(tr);
+            });
+            lucide.createIcons();
+        }
+
+        // ========== Render Properties ==========
+        function renderProperties() {
+            let totalValue = 0, totalCost = 0, totalNetRent = 0;
+            properties.forEach(p => {
+                totalValue += convertToHKD(p.currentValue, p.currency);
+                totalCost += convertToHKD(p.buyPrice, p.currency);
+                const net = (p.annualRent || 0) - (p.mgmtFee || 0) - (p.rates || 0) - (p.otherExp || 0);
+                totalNetRent += convertToHKD(net, p.currency);
+            });
+            const capitalGain = totalValue - totalCost;
+            const yieldPct = totalCost > 0 ? (totalNetRent / totalCost) * 100 : 0;
+
+            document.getElementById('prop-total-value').innerText = `$${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            document.getElementById('prop-total-cost').innerText = `總買入成本: $${totalCost.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+            document.getElementById('prop-net-rent').innerText = `$${totalNetRent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            document.getElementById('prop-yield').innerText = `${yieldPct.toFixed(2)}%`;
+            const cgEl = document.getElementById('prop-capital-gain');
+            cgEl.innerText = `${capitalGain >= 0 ? '+' : ''}$${capitalGain.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            cgEl.className = `text-2xl font-bold ${capitalGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`;
+
+            document.getElementById('prop-badge-count').innerText = `${properties.length} 筆`;
+            const tbody = document.getElementById('property-tbody');
+            const emptyEl = document.getElementById('property-empty');
+            tbody.innerHTML = '';
+            emptyEl.classList.toggle('hidden', properties.length > 0);
+
+            properties.forEach(p => {
+                const net = (p.annualRent || 0) - (p.mgmtFee || 0) - (p.rates || 0) - (p.otherExp || 0);
+                const yld = p.buyPrice > 0 ? (net / p.buyPrice) * 100 : 0;
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50/80 transition';
+                tr.innerHTML = `
+                    <td class="py-3 px-4">
+                        <div class="font-semibold text-slate-900">${escapeHtml(p.name)}</div>
+                        ${p.buyDate ? `<div class="text-xs text-slate-500">買入: ${escapeHtml(p.buyDate)}</div>` : ''}
+                        ${p.note ? `<div class="text-xs text-slate-400">${escapeHtml(p.note)}</div>` : ''}
+                    </td>
+                    <td class="py-3 px-4 text-right">${escapeHtml(p.currency)} ${fmtMoney(p.buyPrice)}</td>
+                    <td class="py-3 px-4 text-right font-medium">${escapeHtml(p.currency)} ${fmtMoney(p.currentValue)}</td>
+                    <td class="py-3 px-4 text-right text-emerald-700">${escapeHtml(p.currency)} ${fmtMoney(p.annualRent || 0)}</td>
+                    <td class="py-3 px-4 text-right text-slate-500">${escapeHtml(p.currency)} ${fmtMoney(p.mgmtFee || 0)}</td>
+                    <td class="py-3 px-4 text-right text-slate-500">${escapeHtml(p.currency)} ${fmtMoney(p.rates || 0)}</td>
+                    <td class="py-3 px-4 text-right text-slate-500">${escapeHtml(p.currency)} ${fmtMoney(p.otherExp || 0)}</td>
+                    <td class="py-3 px-4 text-right font-semibold text-emerald-600">${escapeHtml(p.currency)} ${fmtMoney(net)}</td>
+                    <td class="py-3 px-4 text-right font-medium">${yld.toFixed(2)}%</td>
+                    <td class="py-3 px-4 text-center">
+                        <div class="flex items-center justify-center space-x-0.5">
+                            <button onclick="openPropertyModal('${p.id}')" class="p-1.5 hover:bg-slate-200 rounded-lg text-slate-600" title="編輯"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
+                            <button onclick="deleteProperty('${p.id}')" class="p-1.5 hover:bg-rose-100 rounded-lg text-rose-600" title="刪除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </div>
+                    </td>`;
+                tbody.appendChild(tr);
+            });
+            lucide.createIcons();
+        }
+
+        // ========== AI ==========
+        function openAiAdvisor() {
+            document.getElementById('ai-modal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+        function closeAiAdvisor() { document.getElementById('ai-modal').classList.add('hidden'); }
+        function askAi(promptText) {
+            const box = document.getElementById('ai-response-box');
+            box.classList.remove('hidden');
+            const summary = holdings.map(h => `- ${h.name} (${h.ticker}): 數量 ${h.quantity}, 成本 ${h.buyPrice}, 現價 ${h.currentPrice ?? h.buyPrice}`).join('\n');
+            const inc = incomeRecords.slice(0, 20).map(r => `- ${r.date} ${r.ticker}: ${r.currency} ${r.amount}`).join('\n');
+            const prop = properties.map(p => `- ${p.name}: 買入 ${p.buyPrice}, 市值 ${p.currentValue}, 年租 ${p.annualRent}`).join('\n');
+            box.innerHTML = `<div class="text-slate-600 text-sm">目前需自行複製以下摘要到其他 AI 工具分析：<br><br>
+                <strong>持倉</strong><pre class="mt-1 p-2 bg-slate-100 rounded text-xs overflow-x-auto whitespace-pre-wrap">${summary || '無'}</pre>
+                <strong class="mt-3 block">近期股息入帳</strong><pre class="mt-1 p-2 bg-slate-100 rounded text-xs overflow-x-auto whitespace-pre-wrap">${inc || '無'}</pre>
+                <strong class="mt-3 block">不動產</strong><pre class="mt-1 p-2 bg-slate-100 rounded text-xs overflow-x-auto whitespace-pre-wrap">${prop || '無'}</pre>
+                <p class="mt-3 text-xs text-slate-500">問題：${promptText || '（請在下方輸入）'}</p></div>`;
+        }
+        function submitAiPrompt() {
+            const v = document.getElementById('ai-custom-prompt').value.trim();
+            if (!v) return;
+            askAi(v);
+            document.getElementById('ai-custom-prompt').value = '';
+        }
+
+        // Expose
+        window.exportToJson = exportToJson;
+        window.triggerImport = triggerImport;
+        window.handleFileImport = handleFileImport;
+        window.refreshAllPrices = refreshAllPrices;
+        window.openAddModal = openAddModal;
+        window.closeAddModal = closeAddModal;
+        window.onAssetTypeChange = onAssetTypeChange;
+        window.handleFormSubmit = handleFormSubmit;
+        window.deleteHolding = deleteHolding;
+        window.autoFillByTicker = autoFillByTicker;
+        window.openAiAdvisor = openAiAdvisor;
+        window.closeAiAdvisor = closeAiAdvisor;
+        window.askAi = askAi;
+        window.submitAiPrompt = submitAiPrompt;
+        window.renderTable = renderTable;
+        window.switchTab = switchTab;
+        window.openEmailModal = openEmailModal;
+        window.closeEmailModal = closeEmailModal;
+        window.bindEmailAndLoad = bindEmailAndLoad;
+        window.saveToCloud = saveToCloud;
+        window.unbindEmail = unbindEmail;
+        window.openRateModal = openRateModal;
+        window.closeRateModal = closeRateModal;
+        window.applyManualRates = applyManualRates;
+        window.resetAutoRates = resetAutoRates;
+        window.headerAddAction = headerAddAction;
+        window.openIncomeModal = openIncomeModal;
+        window.closeIncomeModal = closeIncomeModal;
+        window.handleIncomeSubmit = handleIncomeSubmit;
+        window.deleteIncomeRecord = deleteIncomeRecord;
+        window.openPropertyModal = openPropertyModal;
+        window.closePropertyModal = closePropertyModal;
+        window.handlePropertySubmit = handlePropertySubmit;
+        window.deleteProperty = deleteProperty;
+        window.openInsuranceModal = openInsuranceModal;
+        window.closeInsuranceModal = closeInsuranceModal;
+        window.handleInsuranceSubmit = handleInsuranceSubmit;
+        window.deleteInsurance = deleteInsurance;
+    </script>
+</body>
+</html>
