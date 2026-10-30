@@ -2,7 +2,7 @@
   "name": "J.Law Portfolio Tracking",
   "short_name": "J.Law Portfolio",
   "description": "智慧持倉、被動收入、不動產與保險追蹤",
-  "start_url": "./J.Law_Portfolio_Tracking.html",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
