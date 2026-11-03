@@ -14,22 +14,10 @@
     <link rel="apple-touch-icon" href="./apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
     <link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png">
-    <link rel="stylesheet" href="./offline-fallback.css">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        brand: { 50: '#f0fdf4', 100: '#dcfce7', 500: '#22c55e', 600: '#16a34a', 700: '#15803d' }
-                    }
-                }
-            }
-        }
-    </script>
-    <script src="https://unpkg.com/lucide@0.460.0"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Local assets for reliable offline UI (no CDN dependency) -->
+    <link rel="stylesheet" href="./tailwind-built.css">
+    <script src="./lucide.min.js"></script>
+    <script src="./supabase.min.js"></script>
     <style>
         body { font-family: 'Inter', 'Microsoft JhengHei', 'PingFang TC', 'Noto Sans TC', ui-sans-serif, system-ui, sans-serif; }
         .tab-active { border-bottom: 2px solid #10b981; color: #059669; font-weight: 600; }
