@@ -1,23 +1,35 @@
 /* J.Law Portfolio Tracking — Service Worker
- * 離線策略對齊 boardgame 水準：分層快取、API 不攔截、CDN 可離線
- * Cache: jlaw-portfolio-v2 (主) + jlaw-portfolio-cdn-v1 (第三方 SDK/樣式)
+ * 離線策略（對齊分享本本 v3 + 原有分層 API 策略）：
+ * - App shell：逐個 cache（唔用會全死嘅 addAll）
+ * - 關鍵 CDN：install 預拉 + cache-first（Tailwind / Lucide / Supabase SDK）
+ * - Supabase REST/Auth、匯率 API、esm.sh：完全不攔截
+ * - 導航：cache-first + 離線 fallback index.html
+ * Cache: jlaw-portfolio-v3 (主) + jlaw-portfolio-cdn-v3 (第三方)
  */
-const CACHE = 'jlaw-portfolio-v2';
-const CDN_CACHE = 'jlaw-portfolio-cdn-v1';
+const CACHE = 'jlaw-portfolio-v3';
+const CDN_CACHE = 'jlaw-portfolio-cdn-v3';
 
-/** 預快取核心（same-origin）。若實際 HTML 檔名不同，請改這裡並重新部署。 */
+/** 預快取核心（same-origin）。缺檔唔會令整個 install 失敗。 */
 const CORE = [
   './',
   './index.html',
   './manifest.webmanifest',
+  './sw.js',
   './icon-192.png',
   './icon-512.png',
-  './apple-touch-icon.png'
+  './apple-touch-icon.png',
+  './favicon.ico'
 ];
 
-// ---------- 判斷函式（分層策略用） ----------
+/** 關鍵 CDN：首次在線時寫入，離線先有樣式 / 圖示 / Supabase client */
+const CRITICAL_CDN = [
+  'https://cdn.tailwindcss.com',
+  'https://unpkg.com/lucide@0.460.0',
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'
+];
 
-/** Supabase REST / Auth：動態資料，絕對不攔截、不快取 */
+// ---------- 判斷函式 ----------
+
 function isSupabaseApi(url) {
   return (
     url.hostname.endsWith('.supabase.co') &&
@@ -25,17 +37,14 @@ function isSupabaseApi(url) {
   );
 }
 
-/** 匯率 API：動態，不攔截 */
 function isRateApi(url) {
   return url.hostname === 'open.er-api.com' || url.hostname.endsWith('er-api.com');
 }
 
-/** stock-sdk 動態 import（esm.sh）：行為複雜，直接放行 */
 function isStockSdk(url) {
   return url.hostname === 'esm.sh' || url.hostname.endsWith('.esm.sh');
 }
 
-/** Supabase JS SDK（jsdelivr 固定路徑）：可 cache-first，離線才能初始化 client */
 function isSupabaseSdk(url) {
   return (
     url.hostname === 'cdn.jsdelivr.net' &&
@@ -43,27 +52,22 @@ function isSupabaseSdk(url) {
   );
 }
 
-/** Tailwind CDN：可快取以便離線有樣式（正式環境不建議用 CDN，此為 PWA 離線 workaround） */
 function isTailwind(url) {
   return url.hostname === 'cdn.tailwindcss.com';
 }
 
-/** Lucide icons：可 cache-first；強烈建議 HTML 改固定版本而非 @latest */
 function isLucide(url) {
   return url.hostname === 'unpkg.com' && url.pathname.includes('lucide');
 }
 
-/** Google Fonts CSS（若日後加上 link） */
 function isFontCss(url) {
   return url.hostname === 'fonts.googleapis.com';
 }
 
-/** Google Fonts 字型檔 */
 function isFontFile(url) {
   return url.hostname === 'fonts.gstatic.com';
 }
 
-/** 其他常見 CDN：預設 cache-first */
 function isOtherCdn(url) {
   const hosts = [
     'cdn.jsdelivr.net',
@@ -78,7 +82,26 @@ function isSameOrigin(url) {
   return url.origin === self.location.origin;
 }
 
+function isNavigation(request) {
+  return (
+    request.mode === 'navigate' ||
+    (request.method === 'GET' &&
+      (request.headers.get('accept') || '').includes('text/html'))
+  );
+}
+
 // ---------- Cache helpers ----------
+
+async function cacheOne(cache, url) {
+  try {
+    const res = await fetch(url, { cache: 'reload' });
+    if (res && res.ok) {
+      await cache.put(url, res);
+      return true;
+    }
+  } catch (_) {}
+  return false;
+}
 
 async function cacheFirst(req, cacheName) {
   const cached = await caches.match(req);
@@ -91,8 +114,10 @@ async function cacheFirst(req, cacheName) {
       await cache.put(req, clone);
     }
     return res;
-  } catch (err) {
-    // 離線且無 cache：回簡單 503，避免 unhandled rejection
+  } catch (_) {
+    // 試 URL 字串 match（redirect / 變體）
+    const byUrl = await caches.match(new URL(req.url).href);
+    if (byUrl) return byUrl;
     return new Response('Offline and not cached', {
       status: 503,
       statusText: 'Service Unavailable',
@@ -101,7 +126,6 @@ async function cacheFirst(req, cacheName) {
   }
 }
 
-/** network-first，失敗才用 cache（字型 CSS 用） */
 async function networkFirst(req, cacheName) {
   try {
     const res = await fetch(req);
@@ -111,7 +135,7 @@ async function networkFirst(req, cacheName) {
       await cache.put(req, clone);
     }
     return res;
-  } catch (err) {
+  } catch (_) {
     const cached = await caches.match(req);
     if (cached) return cached;
     return new Response('Offline and not cached', {
@@ -122,21 +146,23 @@ async function networkFirst(req, cacheName) {
   }
 }
 
-/** same-origin：cache-first，成功後更新 cache；導航失敗時回 precache HTML */
-async function sameOriginStrategy(req) {
+async function sameOriginStrategy(req, event) {
   const cached = await caches.match(req);
+
   const fetchAndUpdate = fetch(req)
     .then((res) => {
       if (res && res.ok) {
         const clone = res.clone();
-        caches.open(CACHE).then((cache) => cache.put(req, clone));
+        const p = caches.open(CACHE).then((cache) => cache.put(req, clone));
+        if (event && event.waitUntil) event.waitUntil(p);
+        else p.catch(() => {});
       }
       return res;
     })
     .catch(() => null);
 
   if (cached) {
-    // 背景更新，先回 cache
+    // 背景更新
     fetchAndUpdate.catch(() => {});
     return cached;
   }
@@ -144,13 +170,18 @@ async function sameOriginStrategy(req) {
   const networkRes = await fetchAndUpdate;
   if (networkRes) return networkRes;
 
-  // 導航請求離線且 miss：回 precache HTML，避免白屏
-  if (req.mode === 'navigate') {
+  // 導航離線 miss → precache HTML，避免白屏
+  if (isNavigation(req)) {
     const fallback =
       (await caches.match('./index.html')) ||
       (await caches.match('./')) ||
+      (await caches.match('/index.html')) ||
       (await caches.match('./J.Law_Portfolio_Tracking.html'));
     if (fallback) return fallback;
+    return new Response(
+      '<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>離線</title></head><body style="font-family:system-ui;padding:2rem;text-align:center;background:#0f172a;color:#e2e8f0"><h1>離線模式</h1><p>請先在有網路時開啟一次本 App，讓資源完成快取後再離線使用。</p></body></html>',
+      { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+    );
   }
 
   return new Response('Offline', {
@@ -164,22 +195,28 @@ async function sameOriginStrategy(req) {
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches
-      .open(CACHE)
-      .then((cache) => cache.addAll(CORE))
-      .then(() => self.skipWaiting())
+    (async () => {
+      const cache = await caches.open(CACHE);
+      await Promise.all(CORE.map((u) => cacheOne(cache, u)));
+
+      const cdnCache = await caches.open(CDN_CACHE);
+      await Promise.all(CRITICAL_CDN.map((u) => cacheOne(cdnCache, u)));
+
+      await self.skipWaiting();
+    })()
   );
 });
 
 self.addEventListener('activate', (event) => {
   const allow = new Set([CACHE, CDN_CACHE]);
   event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(keys.filter((k) => !allow.has(k)).map((k) => caches.delete(k)))
-      )
-      .then(() => self.clients.claim())
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(
+        keys.filter((k) => !allow.has(k)).map((k) => caches.delete(k))
+      );
+      await self.clients.claim();
+    })()
   );
 });
 
@@ -187,22 +224,20 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;
-
-  // 非 GET 不攔截
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
 
-  // 1. Supabase REST/Auth — 完全不攔截（動態 notepad_data 等）
+  // 1. Supabase REST/Auth — 完全不攔截
   if (isSupabaseApi(url)) return;
 
   // 2. 匯率 API — 不攔截
   if (isRateApi(url)) return;
 
-  // 3. stock-sdk (esm.sh) — 不攔截
+  // 3. stock-sdk (esm.sh) — 不攔截（頁面已有 .catch 降級手動填價）
   if (isStockSdk(url)) return;
 
-  // 4. Supabase JS SDK — cache-first（離線可初始化 client）
+  // 4. Supabase JS SDK — cache-first
   if (isSupabaseSdk(url)) {
     event.respondWith(cacheFirst(req, CDN_CACHE));
     return;
@@ -220,7 +255,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 7. Google Fonts CSS — network-first + fallback cache
+  // 7. Google Fonts CSS — network-first + cache fallback
   if (isFontCss(url)) {
     event.respondWith(networkFirst(req, CDN_CACHE));
     return;
@@ -238,9 +273,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 10. 跨域其餘請求：不攔截（避免誤快取未知動態資源）
+  // 10. 其餘跨域：不攔截
   if (!isSameOrigin(url)) return;
 
   // 11. same-origin 靜態資源 + 導航
-  event.respondWith(sameOriginStrategy(req));
+  event.respondWith(sameOriginStrategy(req, event));
 });
