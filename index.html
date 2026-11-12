@@ -113,6 +113,9 @@
                     <button id="privacy-toggle-btn" onclick="togglePrivacyMode()" title="隱藏／顯示金額" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2.5 rounded-xl border border-slate-700 shadow-sm transition flex items-center justify-center" aria-label="隱私模式">
                         <i data-lucide="eye" id="privacy-icon" class="w-4 h-4"></i>
                     </button>
+                    <button id="lock-btn" onclick="openSecurityModal()" title="主密碼／鎖定" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2.5 rounded-xl border border-slate-700 shadow-sm transition flex items-center justify-center" aria-label="主密碼">
+                        <i data-lucide="lock" class="w-4 h-4"></i>
+                    </button>
                     <button id="header-add-btn" onclick="headerAddAction()" title="新增" class="bg-emerald-600 hover:bg-emerald-500 text-white p-2.5 rounded-xl shadow-sm transition flex items-center justify-center" aria-label="新增">
                         <i data-lucide="plus" class="w-4 h-4"></i>
                     </button>
@@ -898,7 +901,78 @@
         </div>
     </div>
 
+<!-- ========== App Lock Overlay ========== -->
+    <div id="app-lock-overlay" class="fixed inset-0 bg-slate-900 flex items-center justify-center p-4 hidden" style="z-index:100; top:0; left:0; right:0; bottom:0;">
+        <div class="w-full" style="max-width: 22rem;">
+            <div class="text-center mb-5">
+                <h2 class="text-lg font-bold text-white tracking-tight">J.Law Portfolio</h2>
+                <p id="lock-overlay-subtitle" class="text-xs text-slate-400 mt-1">輸入主密碼以解鎖</p>
+            </div>
+            <form id="unlock-form" onsubmit="handleUnlockSubmit(event)" class="bg-slate-800 border border-slate-700 rounded-2xl p-4 space-y-3 shadow-2xl">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1">主密碼</label>
+                    <input type="password" id="unlock-password" autocomplete="current-password" required
+                        class="w-full p-2.5 bg-slate-900 border border-slate-600 rounded-xl text-sm text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                        placeholder="輸入主密碼">
+                </div>
+                <p id="unlock-error" class="text-xs text-rose-400 hidden"></p>
+                <button type="submit" id="unlock-submit-btn" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl transition flex items-center justify-center space-x-2">
+                    <i data-lucide="unlock" class="w-4 h-4"></i><span>解鎖</span>
+                </button>
+                <p class="text-[10px] text-slate-500 text-center leading-relaxed">關閉或重新整理後需再解鎖。忘記密碼無法解密本機資料。</p>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========== Security / Master Password Modal ========== -->
+    <div id="security-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden max-h-[90vh] overflow-y-auto">
+            <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between sticky top-0">
+                <h3 class="font-bold text-lg flex items-center space-x-2"><i data-lucide="shield" class="w-5 h-5"></i><span>主密碼安全</span></h3>
+                <button type="button" onclick="closeSecurityModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <p class="text-sm text-slate-600">持倉、股息、不動產與保單會以 <strong>AES-GCM</strong> 加密後存於本機；金鑰由主密碼經 <strong>PBKDF2</strong>（約 12 萬次迭代）衍生。關閉或重新整理頁面後需再次解鎖。</p>
+                <div id="security-status" class="text-xs rounded-xl px-3 py-2 bg-slate-50 border border-slate-200 text-slate-600"></div>
+
+                <div id="security-setup-section" class="space-y-3 hidden">
+                    <h4 class="text-sm font-bold text-slate-800">設定主密碼</h4>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">新主密碼</label>
+                        <input type="password" id="setup-password" autocomplete="new-password" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none" placeholder="至少 6 個字元">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">確認主密碼</label>
+                        <input type="password" id="setup-password2" autocomplete="new-password" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <button type="button" onclick="handleSetupPassword()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl transition">啟用加密並儲存</button>
+                    <p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2">若本機已有未加密資料，啟用時會自動加密遷移並清除明文副本。</p>
+                </div>
+
+                <div id="security-change-section" class="space-y-3 hidden">
+                    <h4 class="text-sm font-bold text-slate-800">變更主密碼</h4>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">目前主密碼</label>
+                        <input type="password" id="change-old-password" autocomplete="current-password" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">新主密碼</label>
+                        <input type="password" id="change-new-password" autocomplete="new-password" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">確認新主密碼</label>
+                        <input type="password" id="change-new-password2" autocomplete="new-password" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <button type="button" onclick="handleChangePassword()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold rounded-xl transition">變更主密碼</button>
+                    <button type="button" onclick="lockAppNow()" class="w-full py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-xl transition">立即鎖定</button>
+                    <button type="button" onclick="handleDisableEncryption()" class="w-full py-2 text-sm text-rose-600 hover:text-rose-700 transition">停用加密（還原為明文本機儲存）</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="toast-container" class="fixed bottom-5 right-5 z-50 space-y-2"></div>
+
     <!-- 下拉更新提示 -->
     <div id="ptr-indicator" class="fixed left-0 right-0 z-50 flex justify-center pointer-events-none opacity-0 transition-opacity duration-150" style="top: calc(env(safe-area-inset-top, 0px) + 8px);">
         <div class="bg-slate-900/90 text-white text-xs font-medium px-3 py-1.5 rounded-full shadow-lg flex items-center space-x-2 border border-slate-700">
@@ -977,11 +1051,11 @@
         }
 
         // ========== State ==========
-        // 預設空陣列，避免新用戶誤以為示例是自己的持倉
-        let holdings = JSON.parse(localStorage.getItem('wealthpulse_holdings') || 'null') || [];
-        let incomeRecords = JSON.parse(localStorage.getItem('wealthpulse_income') || 'null') || [];
-        let properties = JSON.parse(localStorage.getItem('wealthpulse_properties') || 'null') || [];
-        let policies = JSON.parse(localStorage.getItem('wealthpulse_policies') || 'null') || [];
+        // 敏感資料預設空；若有加密 vault 需解鎖後才載入；明文僅在無 vault 時讀取
+        let holdings = [];
+        let incomeRecords = [];
+        let properties = [];
+        let policies = [];
         let currentEmail = localStorage.getItem('portfolio_email') || '';
         let exchangeRates = { USD: 7.82, CNY: 1.08, HKD: 1.0 };
         // 手動覆寫：localStorage 有值則優先使用，不再被 API 蓋掉
@@ -991,8 +1065,117 @@
         let currentTab = 'holdings';
         let syncStatus = 'idle'; // idle | syncing | ok | error
 
-        // v1 → v5 資料遷移：把舊 dividend 轉成 incomeRecords
-        (function migrateV1Data() {
+        // ========== Crypto (AES-GCM + PBKDF2) ==========
+        const PBKDF2_ITERATIONS = 120000;
+        const VAULT_STORAGE_KEY = 'wealthpulse_vault';
+        const PLAIN_STORAGE_KEYS = ['wealthpulse_holdings', 'wealthpulse_income', 'wealthpulse_properties', 'wealthpulse_policies'];
+        /** @type {CryptoKey|null} 僅存在記憶體，關閉／重新整理後失效 */
+        let cryptoKey = null;
+        let appLocked = false;
+        let encryptionEnabled = false;
+
+        function bufToB64(buf) {
+            const bytes = buf instanceof ArrayBuffer ? new Uint8Array(buf) : buf;
+            let s = '';
+            for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+            return btoa(s);
+        }
+        function b64ToBuf(b64) {
+            const s = atob(b64);
+            const bytes = new Uint8Array(s.length);
+            for (let i = 0; i < s.length; i++) bytes[i] = s.charCodeAt(i);
+            return bytes.buffer;
+        }
+        function getVaultMeta() {
+            try {
+                const raw = localStorage.getItem(VAULT_STORAGE_KEY);
+                if (!raw) return null;
+                const v = JSON.parse(raw);
+                if (!v || !v.salt || !v.iv || !v.ciphertext) return null;
+                return v;
+            } catch { return null; }
+        }
+        function hasPlainLocalData() {
+            return PLAIN_STORAGE_KEYS.some(k => {
+                const v = localStorage.getItem(k);
+                return v && v !== 'null' && v !== '[]';
+            });
+        }
+        function loadPlainIntoMemory() {
+            try {
+                holdings = JSON.parse(localStorage.getItem('wealthpulse_holdings') || 'null') || [];
+                incomeRecords = JSON.parse(localStorage.getItem('wealthpulse_income') || 'null') || [];
+                properties = JSON.parse(localStorage.getItem('wealthpulse_properties') || 'null') || [];
+                policies = JSON.parse(localStorage.getItem('wealthpulse_policies') || 'null') || [];
+            } catch {
+                holdings = []; incomeRecords = []; properties = []; policies = [];
+            }
+        }
+        function clearPlainLocalData() {
+            PLAIN_STORAGE_KEYS.forEach(k => localStorage.removeItem(k));
+        }
+        function snapshotSensitiveData() {
+            return {
+                version: 5,
+                holdings,
+                incomeRecords,
+                properties,
+                policies
+            };
+        }
+        function applySensitiveData(data) {
+            holdings = Array.isArray(data?.holdings) ? data.holdings : [];
+            incomeRecords = Array.isArray(data?.incomeRecords) ? data.incomeRecords : [];
+            properties = Array.isArray(data?.properties) ? data.properties : [];
+            policies = Array.isArray(data?.policies) ? data.policies : [];
+        }
+        async function deriveKeyFromPassword(password, saltBuf, iterations = PBKDF2_ITERATIONS) {
+            const enc = new TextEncoder();
+            const baseKey = await crypto.subtle.importKey(
+                'raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']
+            );
+            return crypto.subtle.deriveKey(
+                { name: 'PBKDF2', salt: saltBuf, iterations, hash: 'SHA-256' },
+                baseKey,
+                { name: 'AES-GCM', length: 256 },
+                false,
+                ['encrypt', 'decrypt']
+            );
+        }
+        async function encryptPayload(obj, key) {
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const plain = new TextEncoder().encode(JSON.stringify(obj));
+            const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plain);
+            return { iv: bufToB64(iv), ciphertext: bufToB64(ct) };
+        }
+        async function decryptPayload(vault, key) {
+            const iv = new Uint8Array(b64ToBuf(vault.iv));
+            const ct = b64ToBuf(vault.ciphertext);
+            const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+            const text = new TextDecoder().decode(plainBuf);
+            return JSON.parse(text);
+        }
+        async function writeEncryptedVault(key, dataObj, saltB64, iterations = PBKDF2_ITERATIONS) {
+            const payload = {
+                ...dataObj,
+                _ok: 'jlaw_vault_v1'
+            };
+            const { iv, ciphertext } = await encryptPayload(payload, key);
+            const vault = {
+                v: 1,
+                algo: 'AES-GCM',
+                kdf: 'PBKDF2-SHA256',
+                iterations,
+                salt: saltB64,
+                iv,
+                ciphertext,
+                updatedAt: new Date().toISOString()
+            };
+            localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify(vault));
+            clearPlainLocalData();
+            encryptionEnabled = true;
+        }
+        function migrateV1DataInMemory() {
             if (localStorage.getItem('wealthpulse_migrated_v5')) return;
             let migrated = 0;
             holdings.forEach(h => {
@@ -1016,23 +1199,257 @@
                 }
                 if (h.expectedAnnual != null) delete h.expectedAnnual;
             });
-            if (migrated > 0) {
-                localStorage.setItem('wealthpulse_holdings', JSON.stringify(holdings));
-                localStorage.setItem('wealthpulse_income', JSON.stringify(incomeRecords));
-            }
             localStorage.setItem('wealthpulse_migrated_v5', '1');
-        })();
+            if (migrated > 0 && !encryptionEnabled) {
+                // 明文路徑稍後由 saveAllLocal 寫回
+            }
+        }
 
         // ========== Persistence ==========
-        function saveAllLocal() {
+        async function saveAllLocal() {
+            if (encryptionEnabled && cryptoKey) {
+                const meta = getVaultMeta();
+                const salt = meta?.salt;
+                const iterations = meta?.iterations || PBKDF2_ITERATIONS;
+                if (!salt) {
+                    showToast('加密狀態異常，請重新設定主密碼', 'info');
+                    return;
+                }
+                try {
+                    await writeEncryptedVault(cryptoKey, snapshotSensitiveData(), salt, iterations);
+                } catch (e) {
+                    console.error(e);
+                    showToast('加密儲存失敗', 'info');
+                }
+                return;
+            }
+            // 明文模式（尚未啟用主密碼）
             localStorage.setItem('wealthpulse_holdings', JSON.stringify(holdings));
             localStorage.setItem('wealthpulse_income', JSON.stringify(incomeRecords));
             localStorage.setItem('wealthpulse_properties', JSON.stringify(properties));
             localStorage.setItem('wealthpulse_policies', JSON.stringify(policies));
         }
         function saveAll() {
-            saveAllLocal();
-            autoSaveToCloud();
+            // 鎖定中不寫入
+            if (appLocked) return;
+            saveAllLocal().then(() => autoSaveToCloud()).catch(() => {});
+        }
+
+        function showLockOverlay(show) {
+            const el = document.getElementById('app-lock-overlay');
+            if (!el) return;
+            el.classList.toggle('hidden', !show);
+            appLocked = !!show;
+            if (show) {
+                const inp = document.getElementById('unlock-password');
+                if (inp) { inp.value = ''; setTimeout(() => inp.focus(), 50); }
+                const err = document.getElementById('unlock-error');
+                if (err) { err.classList.add('hidden'); err.textContent = ''; }
+                lucide.createIcons();
+            }
+        }
+        function clearSensitiveMemory() {
+            holdings = [];
+            incomeRecords = [];
+            properties = [];
+            policies = [];
+            cryptoKey = null;
+        }
+        function lockAppNow() {
+            if (!encryptionEnabled) {
+                showToast('尚未啟用主密碼', 'info');
+                return;
+            }
+            clearSensitiveMemory();
+            closeSecurityModal();
+            // 清空畫面上的金額
+            try {
+                renderTable();
+                renderPassiveIncome();
+                renderProperties();
+                renderInsurance();
+            } catch (_) {}
+            showLockOverlay(true);
+            showToast('已鎖定', 'info');
+        }
+        async function handleUnlockSubmit(e) {
+            e.preventDefault();
+            const password = document.getElementById('unlock-password').value;
+            const errEl = document.getElementById('unlock-error');
+            const btn = document.getElementById('unlock-submit-btn');
+            if (!password) return;
+            btn.disabled = true;
+            try {
+                const vault = getVaultMeta();
+                if (!vault) {
+                    errEl.textContent = '找不到加密資料';
+                    errEl.classList.remove('hidden');
+                    return;
+                }
+                const saltBuf = b64ToBuf(vault.salt);
+                const key = await deriveKeyFromPassword(password, saltBuf, vault.iterations || PBKDF2_ITERATIONS);
+                let data;
+                try {
+                    data = await decryptPayload(vault, key);
+                } catch {
+                    errEl.textContent = '主密碼不正確';
+                    errEl.classList.remove('hidden');
+                    return;
+                }
+                if (!data || data._ok !== 'jlaw_vault_v1') {
+                    errEl.textContent = '主密碼不正確或資料損壞';
+                    errEl.classList.remove('hidden');
+                    return;
+                }
+                cryptoKey = key;
+                encryptionEnabled = true;
+                applySensitiveData(data);
+                migrateV1DataInMemory();
+                showLockOverlay(false);
+                updateSecurityUI();
+                renderTable();
+                renderPassiveIncome();
+                renderProperties();
+                renderInsurance();
+                if (currentEmail) bindEmailAndLoad(currentEmail, { silent: true });
+                showToast('已解鎖', 'success');
+            } catch (err) {
+                console.error(err);
+                errEl.textContent = '解鎖失敗，請再試一次';
+                errEl.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+        async function handleSetupPassword() {
+            const p1 = document.getElementById('setup-password').value;
+            const p2 = document.getElementById('setup-password2').value;
+            if (!p1 || p1.length < 6) {
+                showToast('主密碼至少 6 個字元', 'info'); return;
+            }
+            if (p1 !== p2) {
+                showToast('兩次輸入的密碼不一致', 'info'); return;
+            }
+            // 若目前記憶體為空但本機有明文，先載入再加密
+            if (!holdings.length && !incomeRecords.length && !properties.length && !policies.length && hasPlainLocalData()) {
+                loadPlainIntoMemory();
+                migrateV1DataInMemory();
+            }
+            try {
+                const salt = crypto.getRandomValues(new Uint8Array(16));
+                const saltB64 = bufToB64(salt);
+                const key = await deriveKeyFromPassword(p1, salt.buffer, PBKDF2_ITERATIONS);
+                cryptoKey = key;
+                await writeEncryptedVault(key, snapshotSensitiveData(), saltB64, PBKDF2_ITERATIONS);
+                encryptionEnabled = true;
+                document.getElementById('setup-password').value = '';
+                document.getElementById('setup-password2').value = '';
+                updateSecurityUI();
+                closeSecurityModal();
+                showToast('主密碼已啟用，資料已加密', 'success');
+            } catch (err) {
+                console.error(err);
+                showToast('啟用加密失敗', 'info');
+            }
+        }
+        async function handleChangePassword() {
+            const oldP = document.getElementById('change-old-password').value;
+            const n1 = document.getElementById('change-new-password').value;
+            const n2 = document.getElementById('change-new-password2').value;
+            if (!encryptionEnabled || !cryptoKey) {
+                showToast('請先解鎖', 'info'); return;
+            }
+            if (!n1 || n1.length < 6) {
+                showToast('新主密碼至少 6 個字元', 'info'); return;
+            }
+            if (n1 !== n2) {
+                showToast('兩次輸入的新密碼不一致', 'info'); return;
+            }
+            const vault = getVaultMeta();
+            if (!vault) { showToast('找不到加密資料', 'info'); return; }
+            try {
+                // 驗證舊密碼
+                const oldKey = await deriveKeyFromPassword(oldP, b64ToBuf(vault.salt), vault.iterations || PBKDF2_ITERATIONS);
+                try {
+                    const data = await decryptPayload(vault, oldKey);
+                    if (!data || data._ok !== 'jlaw_vault_v1') throw new Error('bad');
+                } catch {
+                    showToast('目前主密碼不正確', 'info'); return;
+                }
+                const salt = crypto.getRandomValues(new Uint8Array(16));
+                const saltB64 = bufToB64(salt);
+                const newKey = await deriveKeyFromPassword(n1, salt.buffer, PBKDF2_ITERATIONS);
+                cryptoKey = newKey;
+                await writeEncryptedVault(newKey, snapshotSensitiveData(), saltB64, PBKDF2_ITERATIONS);
+                document.getElementById('change-old-password').value = '';
+                document.getElementById('change-new-password').value = '';
+                document.getElementById('change-new-password2').value = '';
+                updateSecurityUI();
+                showToast('主密碼已變更', 'success');
+            } catch (err) {
+                console.error(err);
+                showToast('變更失敗', 'info');
+            }
+        }
+        async function handleDisableEncryption() {
+            if (!encryptionEnabled || !cryptoKey) {
+                showToast('請先解鎖', 'info'); return;
+            }
+            if (!confirm('確定停用加密？資料將以明文存回本機 localStorage。')) return;
+            const oldP = document.getElementById('change-old-password').value;
+            const vault = getVaultMeta();
+            if (vault && oldP) {
+                try {
+                    const key = await deriveKeyFromPassword(oldP, b64ToBuf(vault.salt), vault.iterations || PBKDF2_ITERATIONS);
+                    await decryptPayload(vault, key);
+                } catch {
+                    showToast('請先在「目前主密碼」欄輸入正確密碼再停用', 'info');
+                    return;
+                }
+            } else if (vault) {
+                showToast('停用前請輸入目前主密碼以確認', 'info');
+                return;
+            }
+            encryptionEnabled = false;
+            cryptoKey = null;
+            localStorage.removeItem(VAULT_STORAGE_KEY);
+            localStorage.setItem('wealthpulse_holdings', JSON.stringify(holdings));
+            localStorage.setItem('wealthpulse_income', JSON.stringify(incomeRecords));
+            localStorage.setItem('wealthpulse_properties', JSON.stringify(properties));
+            localStorage.setItem('wealthpulse_policies', JSON.stringify(policies));
+            updateSecurityUI();
+            closeSecurityModal();
+            showToast('已停用加密（明文儲存）', 'info');
+        }
+        function updateSecurityUI() {
+            const status = document.getElementById('security-status');
+            const setup = document.getElementById('security-setup-section');
+            const change = document.getElementById('security-change-section');
+            if (!status) return;
+            if (encryptionEnabled && cryptoKey) {
+                status.innerHTML = '<span class="text-emerald-700 font-semibold">已啟用加密</span> · 本次工作階段已解鎖';
+                setup?.classList.add('hidden');
+                change?.classList.remove('hidden');
+            } else if (getVaultMeta()) {
+                status.innerHTML = '<span class="text-amber-700 font-semibold">已啟用加密</span> · 目前鎖定中';
+                setup?.classList.add('hidden');
+                change?.classList.add('hidden');
+            } else {
+                status.innerHTML = hasPlainLocalData()
+                    ? '<span class="text-slate-700">尚未啟用主密碼</span> · 本機有未加密資料，建議立即設定'
+                    : '<span class="text-slate-700">尚未啟用主密碼</span> · 可選設定以保護本機資料';
+                setup?.classList.remove('hidden');
+                change?.classList.add('hidden');
+            }
+        }
+        function openSecurityModal() {
+            if (appLocked) return;
+            updateSecurityUI();
+            document.getElementById('security-modal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+        function closeSecurityModal() {
+            document.getElementById('security-modal').classList.add('hidden');
         }
 
         // ========== Tabs ==========
@@ -1105,6 +1522,7 @@
         }
 
         async function bindEmailAndLoad(emailOverride, options = {}) {
+            if (appLocked) return;
             // silent: 自動載入時不彈多餘提示
             const silent = !!options.silent;
             // 修復：勿只讀空的 email-input；優先用傳入值 / 已綁定 Email
@@ -1141,7 +1559,7 @@
                         }
                         if (h.expectedAnnual != null) delete h.expectedAnnual;
                     });
-                    saveAllLocal();
+                    await saveAllLocal();
                     renderTable();
                     renderPassiveIncome();
                     renderProperties();
@@ -1160,6 +1578,7 @@
             }
         }
         async function saveToCloud() {
+            if (appLocked) { showToast('請先解鎖', 'info'); return; }
             if (!currentEmail) {
                 const email = document.getElementById('email-input').value.trim().toLowerCase();
                 if (!email || !email.includes('@')) { showToast('請先輸入 Email', 'info'); return; }
@@ -1199,7 +1618,7 @@
         }
         let autoSaveTimer = null;
         async function autoSaveToCloudNow() {
-            if (!currentEmail) return;
+            if (appLocked || !currentEmail) return;
             setSyncStatus('syncing');
             try {
                 const { error } = await supabase.from('notepad_data').upsert({
@@ -1215,7 +1634,7 @@
             }
         }
         function autoSaveToCloud() {
-            if (!currentEmail) return;
+            if (appLocked || !currentEmail) return;
             if (autoSaveTimer) clearTimeout(autoSaveTimer);
             autoSaveTimer = setTimeout(() => {
                 autoSaveTimer = null;
@@ -1486,24 +1905,47 @@
             updateHeaderOffset();
             window.addEventListener('resize', updateHeaderOffset);
             fetchExchangeRates();
-            // 先顯示本機快取，再靜默拉取雲端覆蓋
-            renderTable();
-            if (currentEmail) {
-                bindEmailAndLoad(currentEmail, { silent: true });
-            }
             document.querySelectorAll('[id$="-modal"]').forEach(modal => {
                 modal.addEventListener('click', (e) => {
-                    if (e.target === modal) modal.classList.add('hidden');
+                    if (e.target === modal) {
+                        // 鎖定畫面不可點外側關閉
+                        if (modal.id === 'app-lock-overlay') return;
+                        modal.classList.add('hidden');
+                    }
                 });
             });
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape') {
-                    document.querySelectorAll('[id$="-modal"]').forEach(m => m.classList.add('hidden'));
+                    document.querySelectorAll('[id$="-modal"]').forEach(m => {
+                        if (m.id === 'app-lock-overlay') return;
+                        m.classList.add('hidden');
+                    });
                 }
             });
             setupPullToRefresh();
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('./sw.js').catch((err) => console.warn('SW register failed', err));
+            }
+
+            // 加密 vault 存在 → 必須解鎖；否則載入明文
+            const vault = getVaultMeta();
+            if (vault) {
+                encryptionEnabled = true;
+                clearSensitiveMemory();
+                showLockOverlay(true);
+                updateSecurityUI();
+            } else {
+                loadPlainIntoMemory();
+                migrateV1DataInMemory();
+                if (hasPlainLocalData() || holdings.length || incomeRecords.length) {
+                    // 確保遷移後的結果寫回（僅明文模式）
+                    saveAllLocal();
+                }
+                renderTable();
+                if (currentEmail) {
+                    bindEmailAndLoad(currentEmail, { silent: true });
+                }
+                updateSecurityUI();
             }
         }
         if (document.readyState === 'loading') {
@@ -1512,13 +1954,13 @@
             initApp();
         }
         window.addEventListener('pageshow', (e) => {
-            // 從背景／往返快取回到 App 時也自動同步
-            if (e.persisted && currentEmail) {
+            // 從背景／往返快取回到 App 時也自動同步（已解鎖才拉）
+            if (e.persisted && currentEmail && !appLocked && cryptoKey) {
                 bindEmailAndLoad(currentEmail, { silent: true });
             }
         });
         document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible' && currentEmail) {
+            if (document.visibilityState === 'visible' && currentEmail && !appLocked && (cryptoKey || !encryptionEnabled)) {
                 // 重新打開畫面時靜默刷新雲端（節流：至少間隔 30 秒）
                 const now = Date.now();
                 if (!window.__lastCloudPull || now - window.__lastCloudPull > 30000) {
@@ -1542,6 +1984,7 @@
 
         // ========== Export / Import ==========
         function exportToJson() {
+            if (appLocked) { showToast('請先解鎖', 'info'); return; }
             const payload = { version: 5, holdings, incomeRecords, properties, policies, exportedAt: new Date().toISOString() };
             const a = document.createElement('a');
             a.href = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(payload, null, 2));
@@ -1551,7 +1994,10 @@
             a.remove();
             showToast('已匯出完整資料（持倉／股息／不動產／保險）', 'success');
         }
-        function triggerImport() { document.getElementById('import-file-input').click(); }
+        function triggerImport() {
+            if (appLocked) { showToast('請先解鎖', 'info'); return; }
+            document.getElementById('import-file-input').click();
+        }
         function handleFileImport(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -2514,6 +2960,13 @@
         window.closeInsuranceModal = closeInsuranceModal;
         window.handleInsuranceSubmit = handleInsuranceSubmit;
         window.deleteInsurance = deleteInsurance;
+        window.openSecurityModal = openSecurityModal;
+        window.closeSecurityModal = closeSecurityModal;
+        window.handleSetupPassword = handleSetupPassword;
+        window.handleChangePassword = handleChangePassword;
+        window.handleDisableEncryption = handleDisableEncryption;
+        window.handleUnlockSubmit = handleUnlockSubmit;
+        window.lockAppNow = lockAppNow;
     </script>
 </body>
 </html>
