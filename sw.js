@@ -1,5 +1,5 @@
 /* J.Law Portfolio Tracking — offline package Service Worker */
-const CACHE = 'jlaw-portfolio-offline-v2';
+const CACHE = 'jlaw-portfolio-offline-v3';
 const CORE = [
   './',
   './index.html',
