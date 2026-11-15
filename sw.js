@@ -7,9 +7,9 @@ const CORE = [
   './icon-192.png',
   './icon-512.png',
   './apple-touch-icon.png',
-  './tailwind.css',
+  './tailwind-built.css',
   './lucide.min.js',
-  './supabase.js'
+  './supabase.min.js'
 ];
 
 self.addEventListener('install', (event) => {
