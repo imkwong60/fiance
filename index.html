@@ -14,28 +14,15 @@
     <link rel="apple-touch-icon" href="./apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
     <link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png">
-    <!-- Local assets for reliable offline UI (no CDN dependency) -->
-    <link rel="stylesheet" href="./tailwind-built.css">
+    <link rel="stylesheet" href="./tailwind.css">
     <script src="./lucide.min.js"></script>
-    <script src="./supabase.min.js"></script>
+    <script src="./supabase.js"></script>
     <style>
         body { font-family: 'Inter', 'Microsoft JhengHei', 'PingFang TC', 'Noto Sans TC', ui-sans-serif, system-ui, sans-serif; }
         .tab-active { border-bottom: 2px solid #10b981; color: #059669; font-weight: 600; }
-        /* 下拉過度捲動時顯示與頂欄相同的深色，避免露出白底 */
-        html {
-            min-height: 100%;
-            background-color: #0f172a;
-        }
-        body {
-            min-height: 100%;
-            background-color: #f8fafc;
-            padding-bottom: env(safe-area-inset-bottom, 0);
-            overscroll-behavior-y: none;
-        }
-        #main-content {
-            overscroll-behavior-y: contain;
-            -webkit-overflow-scrolling: touch;
-        }
+        html, body { min-height: 100%; }
+        /* 頂部／底部安全區：避免遮住 iPhone 時間與底部橫條 */
+        body { padding-bottom: env(safe-area-inset-bottom, 0); }
         #app-header {
             padding-top: env(safe-area-inset-top, 0);
             padding-left: env(safe-area-inset-left, 0);
@@ -87,7 +74,7 @@
                     <div id="desktop-email-chip" class="hidden sm:flex items-center space-x-2 bg-slate-800 px-3 py-1.5 rounded-lg text-xs border border-slate-700">
                         <span id="sync-status-dot" class="inline-block w-2 h-2 rounded-full bg-slate-500" title="未同步"></span>
                         <i data-lucide="mail" class="w-3.5 h-3.5 text-slate-400"></i>
-                        <span id="email-status" class="text-slate-300 max-w-[140px] truncate">未綁定 Email</span>
+                        <span id="email-status" class="text-slate-300 max-w-[140px] truncate">未登入</span>
                     </div>
                     <button type="button" onclick="openRateModal()" id="exchange-rate-badge" title="點擊可查看 / 手動設定匯率" class="hidden md:flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg text-xs border border-slate-700 transition cursor-pointer">
                         <span id="rate-status-dot" class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -126,7 +113,7 @@
                 <button type="button" onclick="openEmailModal()" class="flex items-center space-x-1.5 bg-slate-800/80 px-2.5 py-1.5 rounded-lg border border-slate-700 min-w-0 max-w-[48%]">
                     <span id="sync-status-dot-m" class="inline-block w-1.5 h-1.5 rounded-full bg-slate-500 shrink-0"></span>
                     <i data-lucide="mail" class="w-3 h-3 text-slate-400 shrink-0"></i>
-                    <span id="email-status-m" class="text-slate-300 truncate">未綁定 Email</span>
+                    <span id="email-status-m" class="text-slate-300 truncate">未登入</span>
                 </button>
                 <button type="button" onclick="openRateModal()" class="flex items-center space-x-1.5 bg-slate-800/80 px-2.5 py-1.5 rounded-lg border border-slate-700 shrink-0">
                     <span id="rate-status-dot-m" class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>
@@ -579,27 +566,37 @@
         </div>
     </div>
 
-    <!-- ========== Email Modal ========== -->
+    <!-- ========== Auth Modal ========== -->
     <div id="email-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden">
             <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
-                <h3 class="font-bold text-lg flex items-center space-x-2"><i data-lucide="cloud" class="w-5 h-5"></i><span>Email 綁定 · 雲端同步</span></h3>
+                <h3 class="font-bold text-lg flex items-center space-x-2"><i data-lucide="cloud" class="w-5 h-5"></i><span>登入 · 雲端同步</span></h3>
                 <button onclick="closeEmailModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
-            <div class="p-6 space-y-4">
-                <p class="text-sm text-slate-600">輸入 Email 作為資料 ID，持倉、股息紀錄與不動產會一併同步至 Supabase。</p>
+            <div id="auth-signed-out" class="p-6 space-y-4">
+                <p class="text-sm text-slate-600">登入後才能讀寫你的雲端資料；資料依登入帳號隔離。</p>
                 <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1">Email 地址</label>
-                    <input type="email" id="email-input" placeholder="your@email.com" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    <input type="email" id="email-input" autocomplete="email" placeholder="your@email.com" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
                 </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">密碼</label>
+                    <input type="password" id="auth-password-input" autocomplete="current-password" onkeydown="if(event.key==='Enter'){signInWithPassword();}" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+                <button id="pw-login-btn" onclick="signInWithPassword()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl transition">登入</button>
+                <button id="send-link-btn" onclick="sendMagicLink()" class="w-full py-2 text-sm text-slate-500 hover:text-slate-800 transition">改用 Email 連結登入（無需密碼）</button>
+                <div id="auth-code-block" class="hidden space-y-2 pt-3 border-t border-slate-100">
+                    <p class="text-xs text-slate-500">已寄出登入連結；如無法開啟連結，可輸入 Email 中的驗證碼。</p>
+                    <input type="text" id="auth-code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="驗證碼" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-center focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    <button id="verify-code-btn" onclick="verifyEmailCode()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold rounded-xl transition">驗證並登入</button>
+                </div>
+            </div>
+            <div id="auth-signed-in" class="p-6 space-y-4 hidden">
+                <div class="text-sm text-slate-700">已登入：<span id="auth-current-email" class="font-semibold"></span></div>
                 <div class="flex flex-col space-y-2">
-                    <button onclick="bindEmailAndLoad()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl transition flex items-center justify-center space-x-2">
-                        <i data-lucide="download-cloud" class="w-4 h-4"></i><span>綁定並從雲端載入</span>
-                    </button>
-                    <button onclick="saveToCloud()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold rounded-xl transition flex items-center justify-center space-x-2">
-                        <i data-lucide="upload-cloud" class="w-4 h-4"></i><span>儲存目前資料到雲端</span>
-                    </button>
-                    <button onclick="unbindEmail()" class="w-full py-2 text-sm text-slate-500 hover:text-rose-600 transition">解除綁定</button>
+                    <button onclick="bindEmailAndLoad()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl transition">從雲端載入</button>
+                    <button onclick="saveToCloud()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold rounded-xl transition">儲存目前資料到雲端</button>
+                    <button onclick="signOutCloud()" class="w-full py-2 text-sm text-slate-500 hover:text-rose-600 transition">登出</button>
                 </div>
             </div>
         </div>
@@ -901,30 +898,24 @@
         </div>
     </div>
 
-<!-- ========== App Lock Overlay ========== -->
     <div id="app-lock-overlay" class="fixed inset-0 bg-slate-900 flex items-center justify-center p-4 hidden" style="z-index:100; top:0; left:0; right:0; bottom:0;">
         <div class="w-full" style="max-width: 22rem;">
             <div class="text-center mb-5">
                 <h2 class="text-lg font-bold text-white tracking-tight">J.Law Portfolio</h2>
-                <p id="lock-overlay-subtitle" class="text-xs text-slate-400 mt-1">輸入主密碼以解鎖</p>
+                <p class="text-xs text-slate-400 mt-1">輸入主密碼以解鎖</p>
             </div>
             <form id="unlock-form" onsubmit="handleUnlockSubmit(event)" class="bg-slate-800 border border-slate-700 rounded-2xl p-4 space-y-3 shadow-2xl">
                 <div>
                     <label class="block text-xs font-semibold text-slate-400 mb-1">主密碼</label>
-                    <input type="password" id="unlock-password" autocomplete="current-password" required
-                        class="w-full p-2.5 bg-slate-900 border border-slate-600 rounded-xl text-sm text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                        placeholder="輸入主密碼">
+                    <input type="password" id="unlock-password" autocomplete="current-password" required class="w-full p-2.5 bg-slate-900 border border-slate-600 rounded-xl text-sm text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none" placeholder="輸入主密碼">
                 </div>
                 <p id="unlock-error" class="text-xs text-rose-400 hidden"></p>
-                <button type="submit" id="unlock-submit-btn" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl transition flex items-center justify-center space-x-2">
-                    <i data-lucide="unlock" class="w-4 h-4"></i><span>解鎖</span>
-                </button>
-                <p class="text-[10px] text-slate-500 text-center leading-relaxed">關閉或重新整理後需再解鎖。忘記密碼無法解密本機資料。</p>
+                <button type="submit" id="unlock-submit-btn" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl transition">解鎖</button>
+                <p class="text-[10px] text-slate-500 text-center leading-relaxed">關閉或重新整理後需再次解鎖。忘記密碼無法解密本機資料。</p>
             </form>
         </div>
     </div>
 
-    <!-- ========== Security / Master Password Modal ========== -->
     <div id="security-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden max-h-[90vh] overflow-y-auto">
             <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between sticky top-0">
@@ -932,37 +923,20 @@
                 <button type="button" onclick="closeSecurityModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
             <div class="p-6 space-y-4">
-                <p class="text-sm text-slate-600">持倉、股息、不動產與保單會以 <strong>AES-GCM</strong> 加密後存於本機；金鑰由主密碼經 <strong>PBKDF2</strong>（約 12 萬次迭代）衍生。關閉或重新整理頁面後需再次解鎖。</p>
+                <p class="text-sm text-slate-600">持倉、股息、不動產與保單可使用 AES-GCM 加密儲存於本機；關閉或重新整理後需再次解鎖。</p>
                 <div id="security-status" class="text-xs rounded-xl px-3 py-2 bg-slate-50 border border-slate-200 text-slate-600"></div>
-
                 <div id="security-setup-section" class="space-y-3 hidden">
                     <h4 class="text-sm font-bold text-slate-800">設定主密碼</h4>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1">新主密碼</label>
-                        <input type="password" id="setup-password" autocomplete="new-password" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none" placeholder="至少 6 個字元">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1">確認主密碼</label>
-                        <input type="password" id="setup-password2" autocomplete="new-password" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
-                    </div>
+                    <input type="password" id="setup-password" autocomplete="new-password" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm" placeholder="主密碼至少 6 個字元">
+                    <input type="password" id="setup-password2" autocomplete="new-password" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm" placeholder="確認主密碼">
                     <button type="button" onclick="handleSetupPassword()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl transition">啟用加密並儲存</button>
-                    <p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2">若本機已有未加密資料，啟用時會自動加密遷移並清除明文副本。</p>
+                    <p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2">若本機已有未加密資料，啟用時會自動加密並清除明文副本。</p>
                 </div>
-
                 <div id="security-change-section" class="space-y-3 hidden">
                     <h4 class="text-sm font-bold text-slate-800">變更主密碼</h4>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1">目前主密碼</label>
-                        <input type="password" id="change-old-password" autocomplete="current-password" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1">新主密碼</label>
-                        <input type="password" id="change-new-password" autocomplete="new-password" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1">確認新主密碼</label>
-                        <input type="password" id="change-new-password2" autocomplete="new-password" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
-                    </div>
+                    <input type="password" id="change-old-password" autocomplete="current-password" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm" placeholder="目前主密碼">
+                    <input type="password" id="change-new-password" autocomplete="new-password" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm" placeholder="新主密碼">
+                    <input type="password" id="change-new-password2" autocomplete="new-password" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm" placeholder="確認新主密碼">
                     <button type="button" onclick="handleChangePassword()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold rounded-xl transition">變更主密碼</button>
                     <button type="button" onclick="lockAppNow()" class="w-full py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-xl transition">立即鎖定</button>
                     <button type="button" onclick="handleDisableEncryption()" class="w-full py-2 text-sm text-rose-600 hover:text-rose-700 transition">停用加密（還原為明文本機儲存）</button>
@@ -972,7 +946,6 @@
     </div>
 
     <div id="toast-container" class="fixed bottom-5 right-5 z-50 space-y-2"></div>
-
     <!-- 下拉更新提示 -->
     <div id="ptr-indicator" class="fixed left-0 right-0 z-50 flex justify-center pointer-events-none opacity-0 transition-opacity duration-150" style="top: calc(env(safe-area-inset-top, 0px) + 8px);">
         <div class="bg-slate-900/90 text-white text-xs font-medium px-3 py-1.5 rounded-full shadow-lg flex items-center space-x-2 border border-slate-700">
@@ -981,18 +954,26 @@
         </div>
     </div>
 
-    <script type="module">
-        // Stock SDK：非阻塞載入，避免白屏；失敗時僅影響自動報價
+    <script>
+        // 離線包不載入遠端 stock-sdk；自動報價不可用，可手動填價
         let StockSDK = null;
         let stockSdkInstance = null;
-        import('https://esm.sh/stock-sdk').then(mod => {
-            StockSDK = mod.StockSDK;
-            stockSdkInstance = new StockSDK();
-        }).catch(e => console.warn('stock-sdk 載入失敗，將僅支援手動填價', e));
 
         const SUPABASE_URL = 'https://wanknivxcsrasdkkxmfr.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndhbmtuaXZ4Y3NyYXNka2t4bWZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODczMzE4NjcsImV4cCI6MjEwMjkwNzg2N30.tqsFimERtYCxoh8J-8FlqxByWtX2gNnyaGo08jditrs';
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        let supabase = null;
+        try {
+            if (window.supabase && typeof window.supabase.createClient === 'function') {
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+                    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+                });
+            } else {
+                console.warn('Supabase SDK 未載入，僅本機模式');
+            }
+        } catch (e) {
+            console.warn('Supabase 未初始化', e);
+            supabase = null;
+        }
 
         lucide.createIcons();
 
@@ -1051,12 +1032,14 @@
         }
 
         // ========== State ==========
-        // 敏感資料預設空；若有加密 vault 需解鎖後才載入；明文僅在無 vault 時讀取
         let holdings = [];
         let incomeRecords = [];
         let properties = [];
         let policies = [];
-        let currentEmail = localStorage.getItem('portfolio_email') || '';
+        let currentEmail = '';
+        let currentUid = '';
+        let pendingAuthEmail = '';
+        try { localStorage.removeItem('portfolio_email'); } catch (_) {}
         let exchangeRates = { USD: 7.82, CNY: 1.08, HKD: 1.0 };
         // 手動覆寫：localStorage 有值則優先使用，不再被 API 蓋掉
         let rateManual = JSON.parse(localStorage.getItem('portfolio_rate_manual') || 'null');
@@ -1065,11 +1048,9 @@
         let currentTab = 'holdings';
         let syncStatus = 'idle'; // idle | syncing | ok | error
 
-        // ========== Crypto (AES-GCM + PBKDF2) ==========
         const PBKDF2_ITERATIONS = 120000;
         const VAULT_STORAGE_KEY = 'wealthpulse_vault';
         const PLAIN_STORAGE_KEYS = ['wealthpulse_holdings', 'wealthpulse_income', 'wealthpulse_properties', 'wealthpulse_policies'];
-        /** @type {CryptoKey|null} 僅存在記憶體，關閉／重新整理後失效 */
         let cryptoKey = null;
         let appLocked = false;
         let encryptionEnabled = false;
@@ -1090,15 +1071,16 @@
             try {
                 const raw = localStorage.getItem(VAULT_STORAGE_KEY);
                 if (!raw) return null;
-                const v = JSON.parse(raw);
-                if (!v || !v.salt || !v.iv || !v.ciphertext) return null;
-                return v;
-            } catch { return null; }
+                const vault = JSON.parse(raw);
+                return vault && vault.salt && vault.iv && vault.ciphertext ? vault : null;
+            } catch (_) {
+                return null;
+            }
         }
         function hasPlainLocalData() {
-            return PLAIN_STORAGE_KEYS.some(k => {
-                const v = localStorage.getItem(k);
-                return v && v !== 'null' && v !== '[]';
+            return PLAIN_STORAGE_KEYS.some(key => {
+                const value = localStorage.getItem(key);
+                return value && value !== 'null' && value !== '[]';
             });
         }
         function loadPlainIntoMemory() {
@@ -1107,33 +1089,24 @@
                 incomeRecords = JSON.parse(localStorage.getItem('wealthpulse_income') || 'null') || [];
                 properties = JSON.parse(localStorage.getItem('wealthpulse_properties') || 'null') || [];
                 policies = JSON.parse(localStorage.getItem('wealthpulse_policies') || 'null') || [];
-            } catch {
+            } catch (_) {
                 holdings = []; incomeRecords = []; properties = []; policies = [];
             }
         }
         function clearPlainLocalData() {
-            PLAIN_STORAGE_KEYS.forEach(k => localStorage.removeItem(k));
+            PLAIN_STORAGE_KEYS.forEach(key => localStorage.removeItem(key));
         }
         function snapshotSensitiveData() {
-            return {
-                version: 5,
-                holdings,
-                incomeRecords,
-                properties,
-                policies
-            };
+            return { version: 5, holdings, incomeRecords, properties, policies };
         }
         function applySensitiveData(data) {
-            holdings = Array.isArray(data?.holdings) ? data.holdings : [];
-            incomeRecords = Array.isArray(data?.incomeRecords) ? data.incomeRecords : [];
-            properties = Array.isArray(data?.properties) ? data.properties : [];
-            policies = Array.isArray(data?.policies) ? data.policies : [];
+            holdings = Array.isArray(data.holdings) ? data.holdings : [];
+            incomeRecords = Array.isArray(data.incomeRecords) ? data.incomeRecords : [];
+            properties = Array.isArray(data.properties) ? data.properties : [];
+            policies = Array.isArray(data.policies) ? data.policies : [];
         }
         async function deriveKeyFromPassword(password, saltBuf, iterations = PBKDF2_ITERATIONS) {
-            const enc = new TextEncoder();
-            const baseKey = await crypto.subtle.importKey(
-                'raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']
-            );
+            const baseKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
             return crypto.subtle.deriveKey(
                 { name: 'PBKDF2', salt: saltBuf, iterations, hash: 'SHA-256' },
                 baseKey,
@@ -1145,33 +1118,27 @@
         async function encryptPayload(obj, key) {
             const iv = crypto.getRandomValues(new Uint8Array(12));
             const plain = new TextEncoder().encode(JSON.stringify(obj));
-            const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plain);
-            return { iv: bufToB64(iv), ciphertext: bufToB64(ct) };
+            const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plain);
+            return { iv: bufToB64(iv), ciphertext: bufToB64(ciphertext) };
         }
         async function decryptPayload(vault, key) {
             const iv = new Uint8Array(b64ToBuf(vault.iv));
-            const ct = b64ToBuf(vault.ciphertext);
-            const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
-            const text = new TextDecoder().decode(plainBuf);
-            return JSON.parse(text);
+            const ciphertext = b64ToBuf(vault.ciphertext);
+            const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+            return JSON.parse(new TextDecoder().decode(plain));
         }
-        async function writeEncryptedVault(key, dataObj, saltB64, iterations = PBKDF2_ITERATIONS) {
-            const payload = {
-                ...dataObj,
-                _ok: 'jlaw_vault_v1'
-            };
-            const { iv, ciphertext } = await encryptPayload(payload, key);
-            const vault = {
+        async function writeEncryptedVault(key, dataObj, salt, iterations = PBKDF2_ITERATIONS) {
+            const { iv, ciphertext } = await encryptPayload({ ...dataObj, _ok: 'jlaw_vault_v1' }, key);
+            localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify({
                 v: 1,
                 algo: 'AES-GCM',
                 kdf: 'PBKDF2-SHA256',
                 iterations,
-                salt: saltB64,
+                salt,
                 iv,
                 ciphertext,
                 updatedAt: new Date().toISOString()
-            };
-            localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify(vault));
+            }));
             clearPlainLocalData();
             encryptionEnabled = true;
         }
@@ -1200,52 +1167,31 @@
                 if (h.expectedAnnual != null) delete h.expectedAnnual;
             });
             localStorage.setItem('wealthpulse_migrated_v5', '1');
-            if (migrated > 0 && !encryptionEnabled) {
-                // 明文路徑稍後由 saveAllLocal 寫回
-            }
+            return migrated > 0;
         }
-
-        // ========== Persistence ==========
-        async function saveAllLocal() {
-            if (encryptionEnabled && cryptoKey) {
-                const meta = getVaultMeta();
-                const salt = meta?.salt;
-                const iterations = meta?.iterations || PBKDF2_ITERATIONS;
-                if (!salt) {
-                    showToast('加密狀態異常，請重新設定主密碼', 'info');
-                    return;
-                }
-                try {
-                    await writeEncryptedVault(cryptoKey, snapshotSensitiveData(), salt, iterations);
-                } catch (e) {
-                    console.error(e);
-                    showToast('加密儲存失敗', 'info');
-                }
+        function initializeSensitiveData() {
+            if (getVaultMeta()) {
+                encryptionEnabled = true;
+                showLockOverlay(true);
                 return;
             }
-            // 明文模式（尚未啟用主密碼）
-            localStorage.setItem('wealthpulse_holdings', JSON.stringify(holdings));
-            localStorage.setItem('wealthpulse_income', JSON.stringify(incomeRecords));
-            localStorage.setItem('wealthpulse_properties', JSON.stringify(properties));
-            localStorage.setItem('wealthpulse_policies', JSON.stringify(policies));
+            loadPlainIntoMemory();
+            const migrated = migrateV1DataInMemory();
+            if (migrated && !encryptionEnabled) saveAllLocal().catch(err => {
+                console.error('資料遷移儲存失敗', err);
+                showToast('資料遷移儲存失敗', 'info');
+            });
         }
-        function saveAll() {
-            // 鎖定中不寫入
-            if (appLocked) return;
-            saveAllLocal().then(() => autoSaveToCloud()).catch(() => {});
-        }
-
         function showLockOverlay(show) {
-            const el = document.getElementById('app-lock-overlay');
-            if (!el) return;
-            el.classList.toggle('hidden', !show);
+            const overlay = document.getElementById('app-lock-overlay');
+            if (!overlay) return;
+            overlay.classList.toggle('hidden', !show);
             appLocked = !!show;
             if (show) {
-                const inp = document.getElementById('unlock-password');
-                if (inp) { inp.value = ''; setTimeout(() => inp.focus(), 50); }
-                const err = document.getElementById('unlock-error');
-                if (err) { err.classList.add('hidden'); err.textContent = ''; }
-                lucide.createIcons();
+                const input = document.getElementById('unlock-password');
+                if (input) { input.value = ''; setTimeout(() => input.focus(), 50); }
+                const error = document.getElementById('unlock-error');
+                if (error) { error.classList.add('hidden'); error.textContent = ''; }
             }
         }
         function clearSensitiveMemory() {
@@ -1262,43 +1208,35 @@
             }
             clearSensitiveMemory();
             closeSecurityModal();
-            // 清空畫面上的金額
-            try {
-                renderTable();
-                renderPassiveIncome();
-                renderProperties();
-                renderInsurance();
-            } catch (_) {}
+            renderTable();
+            renderPassiveIncome();
+            renderProperties();
+            renderInsurance();
             showLockOverlay(true);
             showToast('已鎖定', 'info');
         }
-        async function handleUnlockSubmit(e) {
-            e.preventDefault();
+        async function handleUnlockSubmit(event) {
+            event.preventDefault();
             const password = document.getElementById('unlock-password').value;
-            const errEl = document.getElementById('unlock-error');
-            const btn = document.getElementById('unlock-submit-btn');
+            const errorElement = document.getElementById('unlock-error');
+            const button = document.getElementById('unlock-submit-btn');
             if (!password) return;
-            btn.disabled = true;
+            button.disabled = true;
             try {
                 const vault = getVaultMeta();
-                if (!vault) {
-                    errEl.textContent = '找不到加密資料';
-                    errEl.classList.remove('hidden');
-                    return;
-                }
-                const saltBuf = b64ToBuf(vault.salt);
-                const key = await deriveKeyFromPassword(password, saltBuf, vault.iterations || PBKDF2_ITERATIONS);
+                if (!vault) throw new Error('找不到加密資料');
+                const key = await deriveKeyFromPassword(password, b64ToBuf(vault.salt), vault.iterations || PBKDF2_ITERATIONS);
                 let data;
                 try {
                     data = await decryptPayload(vault, key);
-                } catch {
-                    errEl.textContent = '主密碼不正確';
-                    errEl.classList.remove('hidden');
+                } catch (_) {
+                    errorElement.textContent = '主密碼不正確';
+                    errorElement.classList.remove('hidden');
                     return;
                 }
                 if (!data || data._ok !== 'jlaw_vault_v1') {
-                    errEl.textContent = '主密碼不正確或資料損壞';
-                    errEl.classList.remove('hidden');
+                    errorElement.textContent = '主密碼不正確或資料損壞';
+                    errorElement.classList.remove('hidden');
                     return;
                 }
                 cryptoKey = key;
@@ -1311,26 +1249,21 @@
                 renderPassiveIncome();
                 renderProperties();
                 renderInsurance();
-                if (currentEmail) bindEmailAndLoad(currentEmail, { silent: true });
+                if (currentUid) bindEmailAndLoad(null, { silent: true });
                 showToast('已解鎖', 'success');
             } catch (err) {
-                console.error(err);
-                errEl.textContent = '解鎖失敗，請再試一次';
-                errEl.classList.remove('hidden');
+                console.error('解鎖失敗', err);
+                errorElement.textContent = err.message || '解鎖失敗，請再試一次';
+                errorElement.classList.remove('hidden');
             } finally {
-                btn.disabled = false;
+                button.disabled = false;
             }
         }
         async function handleSetupPassword() {
-            const p1 = document.getElementById('setup-password').value;
-            const p2 = document.getElementById('setup-password2').value;
-            if (!p1 || p1.length < 6) {
-                showToast('主密碼至少 6 個字元', 'info'); return;
-            }
-            if (p1 !== p2) {
-                showToast('兩次輸入的密碼不一致', 'info'); return;
-            }
-            // 若目前記憶體為空但本機有明文，先載入再加密
+            const password = document.getElementById('setup-password').value;
+            const confirmation = document.getElementById('setup-password2').value;
+            if (!password || password.length < 6) { showToast('主密碼至少 6 個字元', 'info'); return; }
+            if (password !== confirmation) { showToast('兩次輸入的密碼不一致', 'info'); return; }
             if (!holdings.length && !incomeRecords.length && !properties.length && !policies.length && hasPlainLocalData()) {
                 loadPlainIntoMemory();
                 migrateV1DataInMemory();
@@ -1338,9 +1271,9 @@
             try {
                 const salt = crypto.getRandomValues(new Uint8Array(16));
                 const saltB64 = bufToB64(salt);
-                const key = await deriveKeyFromPassword(p1, salt.buffer, PBKDF2_ITERATIONS);
+                const key = await deriveKeyFromPassword(password, salt.buffer);
+                await writeEncryptedVault(key, snapshotSensitiveData(), saltB64);
                 cryptoKey = key;
-                await writeEncryptedVault(key, snapshotSensitiveData(), saltB64, PBKDF2_ITERATIONS);
                 encryptionEnabled = true;
                 document.getElementById('setup-password').value = '';
                 document.getElementById('setup-password2').value = '';
@@ -1348,75 +1281,65 @@
                 closeSecurityModal();
                 showToast('主密碼已啟用，資料已加密', 'success');
             } catch (err) {
-                console.error(err);
+                console.error('啟用加密失敗', err);
                 showToast('啟用加密失敗', 'info');
             }
         }
         async function handleChangePassword() {
-            const oldP = document.getElementById('change-old-password').value;
-            const n1 = document.getElementById('change-new-password').value;
-            const n2 = document.getElementById('change-new-password2').value;
-            if (!encryptionEnabled || !cryptoKey) {
-                showToast('請先解鎖', 'info'); return;
-            }
-            if (!n1 || n1.length < 6) {
-                showToast('新主密碼至少 6 個字元', 'info'); return;
-            }
-            if (n1 !== n2) {
-                showToast('兩次輸入的新密碼不一致', 'info'); return;
-            }
+            const oldPassword = document.getElementById('change-old-password').value;
+            const newPassword = document.getElementById('change-new-password').value;
+            const confirmation = document.getElementById('change-new-password2').value;
+            if (!encryptionEnabled || !cryptoKey) { showToast('請先解鎖', 'info'); return; }
+            if (!newPassword || newPassword.length < 6) { showToast('新主密碼至少 6 個字元', 'info'); return; }
+            if (newPassword !== confirmation) { showToast('兩次輸入的新主密碼不一致', 'info'); return; }
             const vault = getVaultMeta();
             if (!vault) { showToast('找不到加密資料', 'info'); return; }
             try {
-                // 驗證舊密碼
-                const oldKey = await deriveKeyFromPassword(oldP, b64ToBuf(vault.salt), vault.iterations || PBKDF2_ITERATIONS);
-                try {
-                    const data = await decryptPayload(vault, oldKey);
-                    if (!data || data._ok !== 'jlaw_vault_v1') throw new Error('bad');
-                } catch {
-                    showToast('目前主密碼不正確', 'info'); return;
-                }
+                const oldKey = await deriveKeyFromPassword(oldPassword, b64ToBuf(vault.salt), vault.iterations || PBKDF2_ITERATIONS);
+                const oldData = await decryptPayload(vault, oldKey);
+                if (!oldData || oldData._ok !== 'jlaw_vault_v1') throw new Error('目前主密碼不正確');
                 const salt = crypto.getRandomValues(new Uint8Array(16));
-                const saltB64 = bufToB64(salt);
-                const newKey = await deriveKeyFromPassword(n1, salt.buffer, PBKDF2_ITERATIONS);
+                const newKey = await deriveKeyFromPassword(newPassword, salt.buffer);
+                await writeEncryptedVault(newKey, snapshotSensitiveData(), bufToB64(salt));
                 cryptoKey = newKey;
-                await writeEncryptedVault(newKey, snapshotSensitiveData(), saltB64, PBKDF2_ITERATIONS);
                 document.getElementById('change-old-password').value = '';
                 document.getElementById('change-new-password').value = '';
                 document.getElementById('change-new-password2').value = '';
                 updateSecurityUI();
                 showToast('主密碼已變更', 'success');
             } catch (err) {
-                console.error(err);
-                showToast('變更失敗', 'info');
+                showToast('變更失敗：' + (err.message || err), 'info');
             }
         }
         async function handleDisableEncryption() {
-            if (!encryptionEnabled || !cryptoKey) {
-                showToast('請先解鎖', 'info'); return;
-            }
+            if (!encryptionEnabled || !cryptoKey) { showToast('請先解鎖', 'info'); return; }
             if (!confirm('確定停用加密？資料將以明文存回本機 localStorage。')) return;
-            const oldP = document.getElementById('change-old-password').value;
+            const oldPassword = document.getElementById('change-old-password').value;
             const vault = getVaultMeta();
-            if (vault && oldP) {
-                try {
-                    const key = await deriveKeyFromPassword(oldP, b64ToBuf(vault.salt), vault.iterations || PBKDF2_ITERATIONS);
-                    await decryptPayload(vault, key);
-                } catch {
-                    showToast('請先在「目前主密碼」欄輸入正確密碼再停用', 'info');
-                    return;
-                }
-            } else if (vault) {
-                showToast('停用前請輸入目前主密碼以確認', 'info');
+            if (!vault || !oldPassword) { showToast('停用前請輸入目前主密碼以確認', 'info'); return; }
+            try {
+                const key = await deriveKeyFromPassword(oldPassword, b64ToBuf(vault.salt), vault.iterations || PBKDF2_ITERATIONS);
+                const data = await decryptPayload(vault, key);
+                if (!data || data._ok !== 'jlaw_vault_v1') throw new Error('目前主密碼不正確');
+            } catch (_) {
+                showToast('目前主密碼不正確', 'info');
                 return;
             }
             encryptionEnabled = false;
+            try {
+                await saveAllLocal();
+                localStorage.removeItem(VAULT_STORAGE_KEY);
+            } catch (err) {
+                encryptionEnabled = true;
+                try { clearPlainLocalData(); } catch (cleanupError) {
+                    console.error('清除停用加密的暫存明文失敗', cleanupError);
+                }
+                console.error('停用加密時儲存明文失敗', err);
+                showToast('停用加密失敗；加密資料仍保留', 'info');
+                return;
+            }
             cryptoKey = null;
-            localStorage.removeItem(VAULT_STORAGE_KEY);
-            localStorage.setItem('wealthpulse_holdings', JSON.stringify(holdings));
-            localStorage.setItem('wealthpulse_income', JSON.stringify(incomeRecords));
-            localStorage.setItem('wealthpulse_properties', JSON.stringify(properties));
-            localStorage.setItem('wealthpulse_policies', JSON.stringify(policies));
+            document.getElementById('change-old-password').value = '';
             updateSecurityUI();
             closeSecurityModal();
             showToast('已停用加密（明文儲存）', 'info');
@@ -1428,18 +1351,18 @@
             if (!status) return;
             if (encryptionEnabled && cryptoKey) {
                 status.innerHTML = '<span class="text-emerald-700 font-semibold">已啟用加密</span> · 本次工作階段已解鎖';
-                setup?.classList.add('hidden');
-                change?.classList.remove('hidden');
+                setup.classList.add('hidden');
+                change.classList.remove('hidden');
             } else if (getVaultMeta()) {
                 status.innerHTML = '<span class="text-amber-700 font-semibold">已啟用加密</span> · 目前鎖定中';
-                setup?.classList.add('hidden');
-                change?.classList.add('hidden');
+                setup.classList.add('hidden');
+                change.classList.add('hidden');
             } else {
                 status.innerHTML = hasPlainLocalData()
                     ? '<span class="text-slate-700">尚未啟用主密碼</span> · 本機有未加密資料，建議立即設定'
                     : '<span class="text-slate-700">尚未啟用主密碼</span> · 可選設定以保護本機資料';
-                setup?.classList.remove('hidden');
-                change?.classList.add('hidden');
+                setup.classList.remove('hidden');
+                change.classList.add('hidden');
             }
         }
         function openSecurityModal() {
@@ -1450,6 +1373,28 @@
         }
         function closeSecurityModal() {
             document.getElementById('security-modal').classList.add('hidden');
+        }
+
+        // ========== Persistence ==========
+        async function saveAllLocal() {
+            if (appLocked) return;
+            if (encryptionEnabled && cryptoKey) {
+                const vault = getVaultMeta();
+                if (!vault || !vault.salt) throw new Error('加密資料遺失，無法儲存');
+                await writeEncryptedVault(cryptoKey, snapshotSensitiveData(), vault.salt, vault.iterations || PBKDF2_ITERATIONS);
+                return;
+            }
+            localStorage.setItem('wealthpulse_holdings', JSON.stringify(holdings));
+            localStorage.setItem('wealthpulse_income', JSON.stringify(incomeRecords));
+            localStorage.setItem('wealthpulse_properties', JSON.stringify(properties));
+            localStorage.setItem('wealthpulse_policies', JSON.stringify(policies));
+        }
+        function saveAll() {
+            if (appLocked) return;
+            saveAllLocal().then(() => autoSaveToCloud()).catch(err => {
+                console.error('本機儲存失敗', err);
+                showToast('本機儲存失敗', 'info');
+            });
         }
 
         // ========== Tabs ==========
@@ -1491,7 +1436,7 @@
 
         // ========== Cloud ==========
         function updateEmailStatus() {
-            const text = currentEmail || '未綁定 Email';
+            const text = currentEmail || '未登入';
             const el = document.getElementById('email-status');
             const elM = document.getElementById('email-status-m');
             if (el) el.innerText = text;
@@ -1499,13 +1444,105 @@
             updateHeaderOffset();
         }
         function openEmailModal() {
-            document.getElementById('email-input').value = currentEmail;
+            document.getElementById('email-input').value = currentEmail || pendingAuthEmail;
+            renderAuthModal();
             document.getElementById('email-modal').classList.remove('hidden');
             lucide.createIcons();
         }
         function closeEmailModal() { document.getElementById('email-modal').classList.add('hidden'); }
-        function getCloudId(email) {
-            return 'jlaw_portfolio_' + email.toLowerCase().trim().replace(/[^a-z0-9@._-]/g, '_');
+        function renderAuthModal() {
+            const signedIn = !!currentUid;
+            document.getElementById('auth-signed-out').classList.toggle('hidden', signedIn);
+            document.getElementById('auth-signed-in').classList.toggle('hidden', !signedIn);
+            document.getElementById('auth-current-email').textContent = currentEmail;
+        }
+        function isValidEmailStr(email) {
+            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        }
+        async function signInWithPassword() {
+            if (!supabase) { showToast('雲端 SDK 未載入，目前僅可使用本機資料', 'info'); return; }
+            const email = (document.getElementById('email-input').value || '').trim().toLowerCase();
+            const password = document.getElementById('auth-password-input').value || '';
+            if (!isValidEmailStr(email) || !password) { showToast('請輸入 Email 與密碼', 'info'); return; }
+            const button = document.getElementById('pw-login-btn');
+            button.disabled = true;
+            try {
+                const { error } = await supabase.auth.signInWithPassword({ email, password });
+                if (error) throw error;
+                document.getElementById('auth-password-input').value = '';
+            } catch (err) {
+                showToast('登入失敗：' + (err.message || err), 'info');
+            } finally {
+                button.disabled = false;
+            }
+        }
+        async function sendMagicLink() {
+            if (!supabase) { showToast('雲端 SDK 未載入，目前僅可使用本機資料', 'info'); return; }
+            const email = (document.getElementById('email-input').value || '').trim().toLowerCase();
+            if (!isValidEmailStr(email)) { showToast('請輸入有效 Email', 'info'); return; }
+            const button = document.getElementById('send-link-btn');
+            button.disabled = true;
+            try {
+                const redirect = location.origin + location.pathname;
+                const { error } = await supabase.auth.signInWithOtp({
+                    email,
+                    options: { emailRedirectTo: redirect, shouldCreateUser: true }
+                });
+                if (error) throw error;
+                pendingAuthEmail = email;
+                document.getElementById('auth-code-block').classList.remove('hidden');
+                showToast('登入連結已寄出，請查看 Email', 'success');
+            } catch (err) {
+                showToast('發送失敗：' + (err.message || err), 'info');
+            } finally {
+                button.disabled = false;
+            }
+        }
+        async function verifyEmailCode() {
+            if (!supabase) { showToast('雲端 SDK 未載入，目前僅可使用本機資料', 'info'); return; }
+            const email = pendingAuthEmail || (document.getElementById('email-input').value || '').trim().toLowerCase();
+            const token = (document.getElementById('auth-code-input').value || '').trim();
+            if (!isValidEmailStr(email) || !token) { showToast('請先發送連結並輸入驗證碼', 'info'); return; }
+            const button = document.getElementById('verify-code-btn');
+            button.disabled = true;
+            try {
+                const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
+                if (error) throw error;
+                document.getElementById('auth-code-input').value = '';
+            } catch (err) {
+                showToast('驗證失敗：' + (err.message || err), 'info');
+            } finally {
+                button.disabled = false;
+            }
+        }
+        async function signOutCloud() {
+            if (!supabase) { showToast('雲端 SDK 未載入，目前僅可使用本機資料', 'info'); return; }
+            const { error } = await supabase.auth.signOut();
+            if (error) {
+                showToast('登出失敗：' + (error.message || error), 'info');
+                return;
+            }
+            closeEmailModal();
+            showToast('已登出（本機資料保留）', 'info');
+        }
+        let _authBooted = false;
+        function handleAuthSession(event, session) {
+            const previousUid = currentUid;
+            currentUid = session && session.user ? session.user.id : '';
+            currentEmail = session && session.user ? (session.user.email || '') : '';
+            updateEmailStatus();
+            renderAuthModal();
+            if (!currentUid) { setSyncStatus('idle'); return; }
+            if (currentUid !== previousUid) {
+                bindEmailAndLoad(null, { silent: event === 'INITIAL_SESSION' });
+            }
+        }
+        function bootAuth() {
+            if (_authBooted || !supabase) return;
+            _authBooted = true;
+            supabase.auth.onAuthStateChange((event, session) => {
+                setTimeout(() => handleAuthSession(event, session), 0);
+            });
         }
         function setSyncStatus(status) {
             syncStatus = status;
@@ -1521,23 +1558,21 @@
             if (elM) { elM.className = cls + ' w-1.5 h-1.5 shrink-0'; elM.title = title; }
         }
 
-        async function bindEmailAndLoad(emailOverride, options = {}) {
+        async function bindEmailAndLoad(_unused, options = {}) {
             if (appLocked) return;
-            // silent: 自動載入時不彈多餘提示
             const silent = !!options.silent;
-            // 修復：勿只讀空的 email-input；優先用傳入值 / 已綁定 Email
-            const inputVal = document.getElementById('email-input')?.value?.trim()?.toLowerCase() || '';
-            const email = (emailOverride || inputVal || currentEmail || '').trim().toLowerCase();
-            if (!email || !email.includes('@')) {
-                if (!silent && !emailOverride) showToast('請輸入有效 Email', 'info');
+            if (!supabase) {
+                setSyncStatus('error');
+                if (!silent) showToast('雲端 SDK 未載入，僅可使用本機資料', 'info');
                 return;
             }
-            currentEmail = email;
-            localStorage.setItem('portfolio_email', currentEmail);
-            updateEmailStatus();
+            if (!currentUid) {
+                if (!silent) { showToast('請先登入', 'info'); openEmailModal(); }
+                return;
+            }
             setSyncStatus('syncing');
             try {
-                const { data, error } = await supabase.from('notepad_data').select('data').eq('id', getCloudId(currentEmail)).maybeSingle();
+                const { data, error } = await supabase.from('app_data').select('data').eq('owner', currentUid).eq('app', 'portfolio').maybeSingle();
                 if (error) throw error;
                 if (data && data.data) {
                     if (Array.isArray(data.data.holdings)) holdings = data.data.holdings;
@@ -1579,27 +1614,17 @@
         }
         async function saveToCloud() {
             if (appLocked) { showToast('請先解鎖', 'info'); return; }
-            if (!currentEmail) {
-                const email = document.getElementById('email-input').value.trim().toLowerCase();
-                if (!email || !email.includes('@')) { showToast('請先輸入 Email', 'info'); return; }
-                currentEmail = email;
-                localStorage.setItem('portfolio_email', currentEmail);
-                updateEmailStatus();
-            }
+            if (!supabase) { showToast('雲端 SDK 未載入，目前僅可使用本機資料', 'info'); return; }
+            if (!currentUid) { showToast('請先登入', 'info'); openEmailModal(); return; }
             setSyncStatus('syncing');
             try {
-                const payload = {
-                    id: getCloudId(currentEmail),
-                    data: {
-                        holdings, incomeRecords, properties, policies,
-                        email: currentEmail,
-                        updatedAt: new Date().toISOString(),
-                        app: 'jlaw_portfolio',
-                        version: 5
-                    },
-                    updated_at: new Date().toISOString()
-                };
-                const { error } = await supabase.from('notepad_data').upsert(payload, { onConflict: 'id' });
+                const now = new Date().toISOString();
+                const { error } = await supabase.from('app_data').upsert({
+                    owner: currentUid,
+                    app: 'portfolio',
+                    data: { holdings, incomeRecords, properties, policies, updatedAt: now, app: 'jlaw_portfolio', version: 5 },
+                    updated_at: now
+                }, { onConflict: 'owner,app' });
                 if (error) throw error;
                 setSyncStatus('ok');
                 showToast('已成功同步到雲端', 'success');
@@ -1609,23 +1634,18 @@
                 showToast('儲存失敗：' + (err.message || err), 'info');
             }
         }
-        function unbindEmail() {
-            currentEmail = '';
-            localStorage.removeItem('portfolio_email');
-            updateEmailStatus();
-            showToast('已解除綁定', 'info');
-            closeEmailModal();
-        }
         let autoSaveTimer = null;
         async function autoSaveToCloudNow() {
-            if (appLocked || !currentEmail) return;
+            if (appLocked || !currentUid || !supabase) return;
             setSyncStatus('syncing');
             try {
-                const { error } = await supabase.from('notepad_data').upsert({
-                    id: getCloudId(currentEmail),
-                    data: { holdings, incomeRecords, properties, policies, email: currentEmail, updatedAt: new Date().toISOString(), app: 'jlaw_portfolio', version: 5 },
-                    updated_at: new Date().toISOString()
-                }, { onConflict: 'id' });
+                const now = new Date().toISOString();
+                const { error } = await supabase.from('app_data').upsert({
+                    owner: currentUid,
+                    app: 'portfolio',
+                    data: { holdings, incomeRecords, properties, policies, updatedAt: now, app: 'jlaw_portfolio', version: 5 },
+                    updated_at: now
+                }, { onConflict: 'owner,app' });
                 if (error) throw error;
                 setSyncStatus('ok');
             } catch (e) {
@@ -1634,7 +1654,7 @@
             }
         }
         function autoSaveToCloud() {
-            if (appLocked || !currentEmail) return;
+            if (appLocked || !currentUid || !supabase) return;
             if (autoSaveTimer) clearTimeout(autoSaveTimer);
             autoSaveTimer = setTimeout(() => {
                 autoSaveTimer = null;
@@ -1897,55 +1917,32 @@
             }, { passive: true });
         }
 
-        // type="module" 為 deferred，window.onload 可能早已觸發 → 改為直接 init
+        // 直接 init（不依賴 window.onload）
         function initApp() {
+            initializeSensitiveData();
+            updateSecurityUI();
+            bootAuth();
             updateEmailStatus();
             updateRateBadge();
             updatePrivacyUI();
             updateHeaderOffset();
             window.addEventListener('resize', updateHeaderOffset);
             fetchExchangeRates();
+            // 先顯示本機快取，再由已驗證的 Auth session 拉取雲端資料
+            renderTable();
             document.querySelectorAll('[id$="-modal"]').forEach(modal => {
                 modal.addEventListener('click', (e) => {
-                    if (e.target === modal) {
-                        // 鎖定畫面不可點外側關閉
-                        if (modal.id === 'app-lock-overlay') return;
-                        modal.classList.add('hidden');
-                    }
+                    if (e.target === modal) modal.classList.add('hidden');
                 });
             });
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape') {
-                    document.querySelectorAll('[id$="-modal"]').forEach(m => {
-                        if (m.id === 'app-lock-overlay') return;
-                        m.classList.add('hidden');
-                    });
+                    document.querySelectorAll('[id$="-modal"]').forEach(m => m.classList.add('hidden'));
                 }
             });
             setupPullToRefresh();
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('./sw.js').catch((err) => console.warn('SW register failed', err));
-            }
-
-            // 加密 vault 存在 → 必須解鎖；否則載入明文
-            const vault = getVaultMeta();
-            if (vault) {
-                encryptionEnabled = true;
-                clearSensitiveMemory();
-                showLockOverlay(true);
-                updateSecurityUI();
-            } else {
-                loadPlainIntoMemory();
-                migrateV1DataInMemory();
-                if (hasPlainLocalData() || holdings.length || incomeRecords.length) {
-                    // 確保遷移後的結果寫回（僅明文模式）
-                    saveAllLocal();
-                }
-                renderTable();
-                if (currentEmail) {
-                    bindEmailAndLoad(currentEmail, { silent: true });
-                }
-                updateSecurityUI();
             }
         }
         if (document.readyState === 'loading') {
@@ -1954,13 +1951,13 @@
             initApp();
         }
         window.addEventListener('pageshow', (e) => {
-            // 從背景／往返快取回到 App 時也自動同步（已解鎖才拉）
-            if (e.persisted && currentEmail && !appLocked && cryptoKey) {
+            // 從背景／往返快取回到 App 時也自動同步
+            if (e.persisted && currentEmail) {
                 bindEmailAndLoad(currentEmail, { silent: true });
             }
         });
         document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible' && currentEmail && !appLocked && (cryptoKey || !encryptionEnabled)) {
+            if (document.visibilityState === 'visible' && currentEmail) {
                 // 重新打開畫面時靜默刷新雲端（節流：至少間隔 30 秒）
                 const now = Date.now();
                 if (!window.__lastCloudPull || now - window.__lastCloudPull > 30000) {
@@ -1984,7 +1981,6 @@
 
         // ========== Export / Import ==========
         function exportToJson() {
-            if (appLocked) { showToast('請先解鎖', 'info'); return; }
             const payload = { version: 5, holdings, incomeRecords, properties, policies, exportedAt: new Date().toISOString() };
             const a = document.createElement('a');
             a.href = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(payload, null, 2));
@@ -1994,10 +1990,7 @@
             a.remove();
             showToast('已匯出完整資料（持倉／股息／不動產／保險）', 'success');
         }
-        function triggerImport() {
-            if (appLocked) { showToast('請先解鎖', 'info'); return; }
-            document.getElementById('import-file-input').click();
-        }
+        function triggerImport() { document.getElementById('import-file-input').click(); }
         function handleFileImport(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -2942,7 +2935,17 @@
         window.closeEmailModal = closeEmailModal;
         window.bindEmailAndLoad = bindEmailAndLoad;
         window.saveToCloud = saveToCloud;
-        window.unbindEmail = unbindEmail;
+        window.signInWithPassword = signInWithPassword;
+        window.sendMagicLink = sendMagicLink;
+        window.verifyEmailCode = verifyEmailCode;
+        window.signOutCloud = signOutCloud;
+        window.openSecurityModal = openSecurityModal;
+        window.closeSecurityModal = closeSecurityModal;
+        window.handleSetupPassword = handleSetupPassword;
+        window.handleChangePassword = handleChangePassword;
+        window.handleDisableEncryption = handleDisableEncryption;
+        window.handleUnlockSubmit = handleUnlockSubmit;
+        window.lockAppNow = lockAppNow;
         window.openRateModal = openRateModal;
         window.closeRateModal = closeRateModal;
         window.applyManualRates = applyManualRates;
@@ -2960,13 +2963,6 @@
         window.closeInsuranceModal = closeInsuranceModal;
         window.handleInsuranceSubmit = handleInsuranceSubmit;
         window.deleteInsurance = deleteInsurance;
-        window.openSecurityModal = openSecurityModal;
-        window.closeSecurityModal = closeSecurityModal;
-        window.handleSetupPassword = handleSetupPassword;
-        window.handleChangePassword = handleChangePassword;
-        window.handleDisableEncryption = handleDisableEncryption;
-        window.handleUnlockSubmit = handleUnlockSubmit;
-        window.lockAppNow = lockAppNow;
     </script>
 </body>
 </html>
