@@ -1209,9 +1209,9 @@
             policies = [];
             cryptoKey = null;
         }
-        function lockAppNow() {
+        function lockAppNow(silent = false) {
             if (!encryptionEnabled) {
-                showToast('尚未啟用主密碼', 'info');
+                if (!silent) showToast('尚未啟用主密碼', 'info');
                 return;
             }
             clearSensitiveMemory();
@@ -1221,7 +1221,10 @@
             renderProperties();
             renderInsurance();
             showLockOverlay(true);
-            showToast('已鎖定', 'info');
+            if (!silent) showToast('已鎖定', 'info');
+        }
+        function lockAppForBackground() {
+            if (encryptionEnabled && !appLocked && cryptoKey) lockAppNow(true);
         }
         async function handleUnlockSubmit(event) {
             event.preventDefault();
@@ -1977,12 +1980,17 @@
         }
         window.addEventListener('pageshow', (e) => {
             // 從背景／往返快取回到 App 時也自動同步
-            if (e.persisted && currentEmail) {
+            if (e.persisted && currentEmail && !appLocked && (cryptoKey || !encryptionEnabled)) {
                 bindEmailAndLoad(currentEmail, { silent: true });
             }
         });
+        window.addEventListener('pagehide', lockAppForBackground);
         document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible' && currentEmail) {
+            if (document.visibilityState === 'hidden') {
+                lockAppForBackground();
+                return;
+            }
+            if (document.visibilityState === 'visible' && currentEmail && !appLocked && (cryptoKey || !encryptionEnabled)) {
                 // 重新打開畫面時靜默刷新雲端（節流：至少間隔 30 秒）
                 const now = Date.now();
                 if (!window.__lastCloudPull || now - window.__lastCloudPull > 30000) {
