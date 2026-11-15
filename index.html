@@ -961,10 +961,10 @@
 
         const SUPABASE_URL = 'https://wanknivxcsrasdkkxmfr.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndhbmtuaXZ4Y3NyYXNka2t4bWZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODczMzE4NjcsImV4cCI6MjEwMjkwNzg2N30.tqsFimERtYCxoh8J-8FlqxByWtX2gNnyaGo08jditrs';
-        let supabase = null;
+        let supabaseClient = null;
         try {
             if (window.supabase && typeof window.supabase.createClient === 'function') {
-                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+                supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
                     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
                 });
             } else {
@@ -972,7 +972,7 @@
             }
         } catch (e) {
             console.warn('Supabase 未初始化', e);
-            supabase = null;
+            supabaseClient = null;
         }
 
         lucide.createIcons();
@@ -1467,7 +1467,7 @@
             const button = document.getElementById('pw-login-btn');
             button.disabled = true;
             try {
-                const { error } = await supabase.auth.signInWithPassword({ email, password });
+                const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
                 if (error) throw error;
                 document.getElementById('auth-password-input').value = '';
             } catch (err) {
@@ -1484,7 +1484,7 @@
             button.disabled = true;
             try {
                 const redirect = location.origin + location.pathname;
-                const { error } = await supabase.auth.signInWithOtp({
+                const { error } = await supabaseClient.auth.signInWithOtp({
                     email,
                     options: { emailRedirectTo: redirect, shouldCreateUser: true }
                 });
@@ -1506,7 +1506,7 @@
             const button = document.getElementById('verify-code-btn');
             button.disabled = true;
             try {
-                const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
+                const { error } = await supabaseClient.auth.verifyOtp({ email, token, type: 'email' });
                 if (error) throw error;
                 document.getElementById('auth-code-input').value = '';
             } catch (err) {
@@ -1517,7 +1517,7 @@
         }
         async function signOutCloud() {
             if (!ensureSupabaseClient()) return;
-            const { error } = await supabase.auth.signOut();
+            const { error } = await supabaseClient.auth.signOut();
             if (error) {
                 showToast('登出失敗：' + (error.message || error), 'info');
                 return;
@@ -1538,20 +1538,20 @@
             }
         }
         function bootAuth() {
-            if (_authBooted || !supabase) return;
+            if (_authBooted || !supabaseClient) return;
             _authBooted = true;
-            supabase.auth.onAuthStateChange((event, session) => {
+            supabaseClient.auth.onAuthStateChange((event, session) => {
                 setTimeout(() => handleAuthSession(event, session), 0);
             });
         }
         function ensureSupabaseClient() {
-            if (supabase) return true;
+            if (supabaseClient) return true;
             if (!window.supabase || typeof window.supabase.createClient !== 'function') {
                 showToast('雲端 SDK 未載入，請確認 supabase.js 與 index.html 位於同一資料夾', 'info');
                 return false;
             }
             try {
-                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+                supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
                     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
                 });
                 bootAuth();
@@ -1589,7 +1589,7 @@
             }
             setSyncStatus('syncing');
             try {
-                const { data, error } = await supabase.from('app_data').select('data').eq('owner', currentUid).eq('app', 'portfolio').maybeSingle();
+                const { data, error } = await supabaseClient.from('app_data').select('data').eq('owner', currentUid).eq('app', 'portfolio').maybeSingle();
                 if (error) throw error;
                 if (data && data.data) {
                     if (Array.isArray(data.data.holdings)) holdings = data.data.holdings;
@@ -1636,7 +1636,7 @@
             setSyncStatus('syncing');
             try {
                 const now = new Date().toISOString();
-                const { error } = await supabase.from('app_data').upsert({
+                const { error } = await supabaseClient.from('app_data').upsert({
                     owner: currentUid,
                     app: 'portfolio',
                     data: { holdings, incomeRecords, properties, policies, updatedAt: now, app: 'jlaw_portfolio', version: 5 },
@@ -1653,11 +1653,11 @@
         }
         let autoSaveTimer = null;
         async function autoSaveToCloudNow() {
-            if (appLocked || !currentUid || !supabase) return;
+            if (appLocked || !currentUid || !supabaseClient) return;
             setSyncStatus('syncing');
             try {
                 const now = new Date().toISOString();
-                const { error } = await supabase.from('app_data').upsert({
+                const { error } = await supabaseClient.from('app_data').upsert({
                     owner: currentUid,
                     app: 'portfolio',
                     data: { holdings, incomeRecords, properties, policies, updatedAt: now, app: 'jlaw_portfolio', version: 5 },
@@ -1671,7 +1671,7 @@
             }
         }
         function autoSaveToCloud() {
-            if (appLocked || !currentUid || !supabase) return;
+            if (appLocked || !currentUid || !supabaseClient) return;
             if (autoSaveTimer) clearTimeout(autoSaveTimer);
             autoSaveTimer = setTimeout(() => {
                 autoSaveTimer = null;
