@@ -14,7 +14,7 @@
     <link rel="apple-touch-icon" href="./apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
     <link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png">
-    <link rel="stylesheet" href="./tailwind-built.css">
+    <link rel="stylesheet" href="./tailwind.css">
     <script src="./lucide.min.js"></script>
     <script src="./supabase.js"></script>
     <style>
@@ -1460,7 +1460,7 @@
             return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
         }
         async function signInWithPassword() {
-            if (!supabase) { showToast('雲端 SDK 未載入，目前僅可使用本機資料', 'info'); return; }
+            if (!ensureSupabaseClient()) return;
             const email = (document.getElementById('email-input').value || '').trim().toLowerCase();
             const password = document.getElementById('auth-password-input').value || '';
             if (!isValidEmailStr(email) || !password) { showToast('請輸入 Email 與密碼', 'info'); return; }
@@ -1477,7 +1477,7 @@
             }
         }
         async function sendMagicLink() {
-            if (!supabase) { showToast('雲端 SDK 未載入，目前僅可使用本機資料', 'info'); return; }
+            if (!ensureSupabaseClient()) return;
             const email = (document.getElementById('email-input').value || '').trim().toLowerCase();
             if (!isValidEmailStr(email)) { showToast('請輸入有效 Email', 'info'); return; }
             const button = document.getElementById('send-link-btn');
@@ -1499,7 +1499,7 @@
             }
         }
         async function verifyEmailCode() {
-            if (!supabase) { showToast('雲端 SDK 未載入，目前僅可使用本機資料', 'info'); return; }
+            if (!ensureSupabaseClient()) return;
             const email = pendingAuthEmail || (document.getElementById('email-input').value || '').trim().toLowerCase();
             const token = (document.getElementById('auth-code-input').value || '').trim();
             if (!isValidEmailStr(email) || !token) { showToast('請先發送連結並輸入驗證碼', 'info'); return; }
@@ -1516,7 +1516,7 @@
             }
         }
         async function signOutCloud() {
-            if (!supabase) { showToast('雲端 SDK 未載入，目前僅可使用本機資料', 'info'); return; }
+            if (!ensureSupabaseClient()) return;
             const { error } = await supabase.auth.signOut();
             if (error) {
                 showToast('登出失敗：' + (error.message || error), 'info');
@@ -1544,6 +1544,24 @@
                 setTimeout(() => handleAuthSession(event, session), 0);
             });
         }
+        function ensureSupabaseClient() {
+            if (supabase) return true;
+            if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+                showToast('雲端 SDK 未載入，請確認 supabase.js 與 index.html 位於同一資料夾', 'info');
+                return false;
+            }
+            try {
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+                    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+                });
+                bootAuth();
+                return true;
+            } catch (err) {
+                console.error('Supabase 初始化失敗', err);
+                showToast('雲端 SDK 初始化失敗：' + (err.message || err), 'info');
+                return false;
+            }
+        }
         function setSyncStatus(status) {
             syncStatus = status;
             const cls = 'inline-block rounded-full ' + (
@@ -1561,9 +1579,8 @@
         async function bindEmailAndLoad(_unused, options = {}) {
             if (appLocked) return;
             const silent = !!options.silent;
-            if (!supabase) {
+            if (!ensureSupabaseClient()) {
                 setSyncStatus('error');
-                if (!silent) showToast('雲端 SDK 未載入，僅可使用本機資料', 'info');
                 return;
             }
             if (!currentUid) {
@@ -1614,7 +1631,7 @@
         }
         async function saveToCloud() {
             if (appLocked) { showToast('請先解鎖', 'info'); return; }
-            if (!supabase) { showToast('雲端 SDK 未載入，目前僅可使用本機資料', 'info'); return; }
+            if (!ensureSupabaseClient()) return;
             if (!currentUid) { showToast('請先登入', 'info'); openEmailModal(); return; }
             setSyncStatus('syncing');
             try {
