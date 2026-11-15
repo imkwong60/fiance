@@ -7,7 +7,7 @@ const CORE = [
   './icon-192.png',
   './icon-512.png',
   './apple-touch-icon.png',
-  './tailwind-built.css',
+  './tailwind.css',
   './lucide.min.js',
   './supabase.min.js'
 ];
