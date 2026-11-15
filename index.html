@@ -955,9 +955,17 @@
     </div>
 
     <script>
-        // 離線包不載入遠端 stock-sdk；自動報價不可用，可手動填價
-        let StockSDK = null;
         let stockSdkInstance = null;
+        const stockSdkReady = import('https://esm.sh/stock-sdk').then(mod => {
+            if (typeof mod.StockSDK !== 'function') {
+                throw new Error('stock-sdk did not export StockSDK');
+            }
+            stockSdkInstance = new mod.StockSDK();
+            return stockSdkInstance;
+        }).catch(err => {
+            console.warn('stock-sdk 載入失敗，將僅支援手動填價', err);
+            return null;
+        });
 
         const SUPABASE_URL = 'https://wanknivxcsrasdkkxmfr.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndhbmtuaXZ4Y3NyYXNka2t4bWZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODczMzE4NjcsImV4cCI6MjEwMjkwNzg2N30.tqsFimERtYCxoh8J-8FlqxByWtX2gNnyaGo08jditrs';
@@ -2424,7 +2432,10 @@
 
         // ========== Stock quote ==========
         async function getStockQuote(ticker, type) {
-            if (!stockSdkInstance) return null;
+            if (!stockSdkInstance) {
+                stockSdkInstance = await stockSdkReady;
+                if (!stockSdkInstance) return null;
+            }
             try {
                 let res = null;
                 if (type === 'HK') {
